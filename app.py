@@ -25,8 +25,8 @@ st.markdown("""
         font-family: 'Figtree', sans-serif !important;
     }
     
-    /* Fondo general utilizando el Gris RN oficial (#E8E8E8) */
-    .main { 
+    /* Fondo general utilizando estrictamente el Gris RN oficial (#E8E8E8) */
+    .stApp, .main, [data-testid="stAppViewContainer"] { 
         background-color: #E8E8E8 !important; 
     }
     
@@ -68,7 +68,7 @@ st.markdown("""
         background-color: #59b040 !important; /* Verde RN ligeramente más oscuro para el hover */
     }
     
-    /* Hashtag de gestión oficial #orgulloríonegro */
+    /* Hashtag de gestión oficial #gobiernodelosrionegrinos */
     .hashtag-gestion {
         color: #6AC64F !important;
         font-weight: 800;
@@ -77,9 +77,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Nombre del archivo Excel que actúa como base de datos y logo personalizado
+# Nombre del archivo Excel que actúa como base de datos y logo personalizado actualizado
 EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
-LOGO_FILE = "logo_UPEU.png"
+LOGO_FILE = "isologo_RN.png"
 
 # ==========================================
 # 2. CONTROL DE ACCESO (MODO LECTOR / EDITOR)
@@ -184,21 +184,21 @@ if 'agenda' not in st.session_state:
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se muestra arriba del todo, alineado a la izquierda, sin columnas que lo aprieten.
+# El logo ahora carga el nuevo archivo 'isologo_RN.png' y utiliza el ancho del contenedor para evitar pixelación
 if os.path.exists(LOGO_FILE):
-    st.image(LOGO_FILE, width=240)
+    st.image(LOGO_FILE, use_container_width=False)
 else:
-    st.info("Logotipo UPEU")
+    st.info("Logotipo Río Negro")
 
 st.markdown("---")  # Línea sutil divisoria debajo del logo oficial
 
-# Ahora sí, por debajo empieza la estructura de títulos y la app
+# Cabecera de títulos y aplicación
 col_title_left, col_title_right = st.columns([4, 1.5])
 
 with col_title_left:
     st.title("Agenda de Planificación Territorial")
     st.markdown("**Unidad Provincial de Enlace con Universidades (UPEU)** | Gobierno de Río Negro")
-    st.markdown("<span class='hashtag-gestion'>#orgulloríonegro</span>", unsafe_allow_html=True) 
+    st.markdown("<span class='hashtag-gestion'>#gobiernodelosrionegrinos</span>", unsafe_allow_html=True) 
 
 with col_title_right:
     st.write("")
@@ -231,7 +231,7 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
-    # Paleta de colores oficial por Prioridad (Verde oficial en prioridad Baja)
+    # Paleta de colores oficial por Prioridad
     colores_prioridad = {
         "ALTA": "#E74C3C",       # Rojo
         "INTERMEDIA": "#F39C12", # Naranja
