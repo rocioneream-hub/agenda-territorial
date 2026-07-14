@@ -5,7 +5,7 @@ from datetime import datetime
 import re
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (DISEÑO)
+# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
 # ==========================================
 st.set_page_config(
     layout="wide", 
@@ -21,7 +21,7 @@ st.markdown("""
         background-color: #f1f5f9; 
     }
     
-    /* Diseño de las tarjetas de formularios (Carga y Edición) */
+    /* Diseño de las tarjetas de formularios */
     div[data-testid="stForm"] { 
         background-color: #ffffff; 
         border-radius: 12px; 
@@ -64,12 +64,14 @@ def limpiar_fecha_para_calendario(val):
     if not val_str or val_str == "nan" or val_str == "":
         return None
     
+    # 1. Formato estándar YYYY-MM-DD
     match_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", val_str)
     if match_iso:
         return match_iso.group(1)
         
     val_str = re.sub(r"\s*/\s*", "/", val_str)
         
+    # 2. Formato rango "17 y 18/07/2026"
     match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{4})", val_str)
     if match_rango:
         dia = match_rango.group(1).zfill(2)
@@ -77,6 +79,7 @@ def limpiar_fecha_para_calendario(val):
         anio = match_rango.group(3)
         return f"{anio}-{mes}-{dia}"
         
+    # 3. Formato DD/MM/YYYY normal
     match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", val_str)
     if match_normal:
         dia = match_normal.group(1).zfill(2)
@@ -87,9 +90,12 @@ def limpiar_fecha_para_calendario(val):
     return None
 
 def load_data():
-    """Carga el Excel, elimina las filas vacías y limpia nulos de todas las columnas, incluida Invitación."""
+    """Carga el Excel, normaliza nombres de columnas, elimina filas fantasma y limpia nulos."""
     try:
         df = pd.read_excel(EXCEL_FILE)
+        
+        # Normalizar los nombres de las columnas para quitar espacios accidentales (ej: 'Invitación a participar ')
+        df.columns = df.columns.str.strip()
         
         # --- ELIMINACIÓN DE FILAS FANTASMA ---
         df['_temp_fecha'] = df['Fecha'].astype(str).str.strip().replace('', None)
@@ -101,10 +107,10 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        # Definimos las columnas que requerimos (agregando Invitación a participar)
+        # Asegurar que existan todas las columnas requeridas (ahora limpias de espacios)
         columnas_requeridas = [
             'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
-            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar '
+            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ]
         for col in columnas_requeridas:
             if col not in df.columns:
@@ -117,7 +123,7 @@ def load_data():
         df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
         df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
         df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
-        df['Invitación a participar '] = df['Invitación a participar '].fillna("").astype(str)
+        df['Invitación a participar'] = df['Invitación a participar'].fillna("").astype(str)
         
         return df.reset_index(drop=True)
         
@@ -125,7 +131,7 @@ def load_data():
         st.error(f"Error al cargar la base de datos: {e}")
         return pd.DataFrame(columns=[
             'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
-            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar '
+            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ])
 
 # Inicializar o forzar la carga de la agenda
@@ -155,6 +161,7 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "✏️ Modificar / Eliminar Actividad",
     "📊 Base de Datos Completa"
 ])
+
 # ------------------------------------------
 # TAB 1: CALENDARIO INTERACTIVO
 # ------------------------------------------
@@ -163,35 +170,30 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
-    
-    # Paleta de colores estándar por prioridad
     colores_prioridad = {
         "ALTA": "#E74C3C",       # Rojo
         "INTERMEDIA": "#F39C12", # Naranja
         "BAJA": "#2ECC71"        # Verde
     }
     
-    # Color especial para destacar eventos con Invitación Especial
-    COLOR_CON_INVITACION = "#8E44AD" # Violeta/Púrpura llamativo
+    # Color especial púrpura para destacar eventos con Invitación formal
+    COLOR_CON_INVITACION = "#8E44AD" 
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
         
         if fecha_limpia:
             # Detectamos si tiene cargado algo en el campo de invitación
-            invitacion_val = str(row.get('Invitación a participar ', '')).strip()
+            invitacion_val = str(row.get('Invitación a participar', '')).strip()
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
-            # Si tiene invitación, le asignamos el color especial. Si no, su color por prioridad.
+            # Si tiene invitación, le asignamos el color púrpura. Si no, su color de prioridad.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
+                titulo_mostrar = f"✉️ [{row['Localidad']}] {row['Actividad']}"
             else:
-                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#34495E") # Gris oscuro por defecto
-            
-            # Modificamos el título para que también tenga un indicador visual rápido (un sobre ✉️)
-            titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
-            if tiene_invitacion:
-                titulo_mostrar = f"✉️ {titulo_mostrar}"
+                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#34495E")
+                titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
                 
             events.append({
                 "title": titulo_mostrar,
@@ -208,8 +210,49 @@ with tab1:
                     "invitacion": invitacion_val if tiene_invitacion else "Sin invitaciones especiales"
                 }
             })
+
+    calendar_options = {
+        "headerToolbar": {
+            "left": "prev,next today",
+            "center": "title",
+            "right": "dayGridMonth,timeGridWeek,listMonth"
+        },
+        "initialView": "dayGridMonth",
+        "locale": "es",
+        "buttonText": {
+            "today": "Hoy",
+            "month": "Mes",
+            "week": "Semana",
+            "list": "Lista"
+        }
+    }
+    
+    if len(events) > 0:
+        state = calendar(events=events, options=calendar_options, key="calendar_agenda")
+        
+        if state.get("eventClick"):
+            clicked = state["eventClick"]["event"]
+            props = clicked.get("extendedProps", {})
+            
+            st.markdown("---")
+            st.subheader("🔍 Detalle de la Actividad Seleccionada")
+            
+            col_det1, col_det2 = st.columns(2)
+            with col_det1:
+                st.markdown(f"**📌 Actividad:** {clicked['title']}")
+                st.markdown(f"**📅 Fecha original:** `{props.get('fecha_original')}`")
+                st.markdown(f"**🏢 Organismo/Actor:** {props.get('organismo')}")
+                st.markdown(f"**🎯 Público Destinatario:** {props.get('publico')}")
+            with col_det2:
+                st.markdown(f"**🚨 Prioridad:** `{props.get('prioridad')}`")
+                st.markdown(f"**⚙️ Estado:** `{props.get('estado')}`")
+                st.markdown(f"**✉️ Invitación a participar:** `{props.get('invitacion')}`")
+                st.markdown(f"**📝 Descripción:** {props.get('descripcion')}")
+    else:
+        st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
+
 # ------------------------------------------
-# TAB 2: FORMULARIO DE CARGA DE DATOS (NUEVA ACTIVIDAD)
+# TAB 2: FORMULARIO DE CARGA DE DATOS
 # ------------------------------------------
 with tab2:
     st.header("Registrar Nueva Actividad")
@@ -247,7 +290,7 @@ with tab2:
                     "Estado": f_estado,
                     "Público Destinatario": f_publico,
                     "Prioridad": f_prioridad,
-                    "Invitación a participar ": f_invitacion  # Guardamos la nueva columna
+                    "Invitación a participar": f_invitacion
                 }
                 
                 st.session_state.agenda = pd.concat([st.session_state.agenda, pd.DataFrame([nueva_actividad])], ignore_index=True)
@@ -302,7 +345,7 @@ with tab3:
                     ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
                     ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
                     ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
-                    ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar ', '')))
+                    ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
                     ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
                 
                 col_btn1, col_btn2 = st.columns(2)
@@ -321,7 +364,7 @@ with tab3:
                     st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
                     st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
                     st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
-                    st.session_state.agenda.at[idx_seleccionado, 'Invitación a participar '] = ed_invitacion
+                    st.session_state.agenda.at[idx_seleccionado, 'Invitación a participar'] = ed_invitacion
                     
                     st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
                     st.success("¡Actividad actualizada con éxito!")
@@ -362,7 +405,7 @@ with tab4:
                 df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
                 df_filtrado['Descripción'].astype(str).str.lower().str.contains(search_query) |
                 df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Invitación a participar '].astype(str).str.lower().str.contains(search_query)
+                df_filtrado['Invitación a participar'].astype(str).str.lower().str.contains(search_query)
             ]
             
         # Renderizado de la tabla
