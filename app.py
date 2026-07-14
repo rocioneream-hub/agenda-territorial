@@ -7,7 +7,7 @@ import re
 # ==========================================
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
 # ==========================================
-st.set_page_config(layout="wide", page_title="Agenda Territorial Ejecutiva", page_icon="🗺️")
+st.set_page_config(layout="wide", page_title="Agenda Territorial", page_icon="🗺️")
 
 st.markdown("""
     <style>
@@ -93,7 +93,7 @@ if 'agenda' not in st.session_state:
 # ==========================================
 # 3. DISEÑO DE LA INTERFAZ DE USUARIO
 # ==========================================
-st.title("🗺️ Agenda Territorial Ejecutiva - UPEU")
+st.title("🗺️ Agenda Territorial - UPEU")
 
 # Botón de rescate: limpia la caché si algo se congela
 col_head1, col_head2 = st.columns([4, 1])
