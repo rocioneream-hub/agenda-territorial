@@ -77,10 +77,39 @@ st.markdown("""
     }
 
     /* ==========================================
-       PERSONALIZACIÓN CSS ULTRA-AGRESIVA PARA EL CALENDARIO (FULLCALENDAR)
+       ANULAR EL ROJO NATIVO DE STREAMLIT (TABS Y SELECCIONES)
        ========================================== */
     
-    /* 1. Forzar color Azul RN en absolutamente todos los botones nativos del calendario */
+    /* Cambiar la línea roja inferior de las Pestañas Activas a Azul RN */
+    div[data-baseweb="tab-list"] button[aria-selected="true"] {
+        color: #007BE0 !important;
+        border-bottom-color: #007BE0 !important;
+    }
+    
+    /* Cambiar el texto de las pestañas no seleccionadas a negro */
+    div[data-baseweb="tab-list"] button[aria-selected="false"] {
+        color: #333333 !important;
+    }
+
+    /* Cambiar el borde rojo/coral de enfoque en inputs y dropdowns a Azul RN */
+    .stTextInput input:focus, 
+    .stSelectbox div[role="button"]:focus, 
+    .stTextArea textarea:focus,
+    div[data-baseweb="select"] > div:focus-within {
+        border-color: #007BE0 !important;
+        box-shadow: 0 0 0 1px #007BE0 !important;
+    }
+
+    /* Cambiar el color de los Spinners de carga a Verde RN */
+    div[data-testid="stSpinner"] > div {
+        border-top-color: #6AC64F !important;
+    }
+
+    /* ==========================================
+       PERSONALIZACIÓN CSS PARA EL CALENDARIO (FULLCALENDAR)
+       ========================================== */
+    
+    /* Forzar color Azul RN en botones nativos del calendario */
     .fc .fc-button,
     .fc .fc-button-primary,
     .fc-button,
@@ -101,7 +130,7 @@ st.markdown("""
         transition: background-color 0.2s ease, border-color 0.2s ease !important;
     }
 
-    /* 2. Forzar fondo Verde RN al pasar el mouse (Hover) por encima de los botones */
+    /* Hover en los botones (Verde RN) */
     .fc .fc-button:hover,
     .fc .fc-button-primary:hover,
     .fc-button:hover,
@@ -116,7 +145,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* 3. Forzar fondo Azul RN Oscuro para el botón de vista activa o seleccionada */
+    /* Botón activo seleccionado */
     .fc .fc-button-primary:not(:disabled).fc-button-active, 
     .fc .fc-button-primary:not(:disabled):active,
     .fc-button-active,
@@ -128,48 +157,36 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* 4. Color de botones deshabilitados del calendario */
-    .fc .fc-button-primary:disabled,
-    .fc-button:disabled {
-        background-color: #b3d7f5 !important;
-        background: #b3d7f5 !important;
-        border-color: #b3d7f5 !important;
-        color: #FFFFFF !important;
-        opacity: 0.7 !important;
-    }
-
-    /* 5. Personalización de los encabezados de los días en el calendario */
+    /* Cabeceras de los días */
     .fc .fc-col-header-cell-cushion {
         color: #000000 !important;
         font-weight: 700 !important;
         text-decoration: none !important;
     }
 
-    /* 6. Bloqueo total de bordes o indicadores rojos nativos de eventos activos */
     .fc-event, .fc-event-dot {
         border-color: transparent !important;
     }
 
-    /* 7. ANULAR EL ROJO EN EL DÍA ACTUAL (HOY) */
-    /* Cambia el texto del número de hoy a Azul RN y saca el fondo rosado/rojo */
+    /* Día de hoy (sutil celeste transparente y número azul) */
     .fc .fc-daygrid-day.fc-day-today {
-        background-color: rgba(0, 123, 224, 0.08) !important; /* Sutil fondo azulado transparente */
+        background-color: rgba(0, 123, 224, 0.08) !important;
     }
     .fc .fc-day-today .fc-daygrid-day-number {
-        color: #007BE0 !important; /* Número de hoy en Azul RN */
+        color: #007BE0 !important;
         font-weight: 800 !important;
     }
     .fc .fc-day-today .fc-daygrid-day-top {
-        border-top: 3px solid #007BE0 !important; /* Línea superior destacada en Azul RN */
+        border-top: 3px solid #007BE0 !important;
     }
 
-    /* 8. ANULAR EL ROJO EN LA LÍNEA E INDICADOR DE HORA ACTUAL (Vistas Semana/Día) */
+    /* Indicador de hora actual en Verde RN */
     .fc .fc-timegrid-now-indicator-line {
-        border-color: #6AC64F !important; /* Línea en Verde RN */
+        border-color: #6AC64F !important;
         border-width: 2px !important;
     }
     .fc .fc-timegrid-now-indicator-arrow {
-        border-top-color: #6AC64F !important; /* Flechita indicadora en Verde RN */
+        border-top-color: #6AC64F !important;
         border-bottom-color: #6AC64F !important;
     }
     
@@ -335,10 +352,10 @@ with tab1:
     colores_prioridad = {
         "ALTA": "#007BE0",       # Azul RN Oficial
         "INTERMEDIA": "#333333", # Gris Carbón
-        "BAJA": "#6AC64F"        # Verde RN Oficial
+        "BAJA": "#6AC64F"        # Verde RN Oficial[cite: 1]
     }
     
-    # Color especial Azul RN oficial para destacar eventos con Invitación formal a participar
+    # Color especial púrpura para destacar eventos con Invitación formal a participar
     COLOR_CON_INVITACION = "#8E44AD" 
     
     for idx, row in st.session_state.agenda.iterrows():
