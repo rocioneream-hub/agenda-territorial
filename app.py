@@ -101,7 +101,7 @@ st.markdown("""
         transition: background-color 0.2s ease, border-color 0.2s ease !important;
     }
 
-    /* 2. Forzar fondo Verde RN al pasar el mouse (Hover) por encima de los botones del calendario */
+    /* 2. Forzar fondo Verde RN al pasar el mouse (Hover) por encima de los botones */
     .fc .fc-button:hover,
     .fc .fc-button-primary:hover,
     .fc-button:hover,
@@ -148,6 +148,29 @@ st.markdown("""
     /* 6. Bloqueo total de bordes o indicadores rojos nativos de eventos activos */
     .fc-event, .fc-event-dot {
         border-color: transparent !important;
+    }
+
+    /* 7. ANULAR EL ROJO EN EL DÍA ACTUAL (HOY) */
+    /* Cambia el texto del número de hoy a Azul RN y saca el fondo rosado/rojo */
+    .fc .fc-daygrid-day.fc-day-today {
+        background-color: rgba(0, 123, 224, 0.08) !important; /* Sutil fondo azulado transparente */
+    }
+    .fc .fc-day-today .fc-daygrid-day-number {
+        color: #007BE0 !important; /* Número de hoy en Azul RN */
+        font-weight: 800 !important;
+    }
+    .fc .fc-day-today .fc-daygrid-day-top {
+        border-top: 3px solid #007BE0 !important; /* Línea superior destacada en Azul RN */
+    }
+
+    /* 8. ANULAR EL ROJO EN LA LÍNEA E INDICADOR DE HORA ACTUAL (Vistas Semana/Día) */
+    .fc .fc-timegrid-now-indicator-line {
+        border-color: #6AC64F !important; /* Línea en Verde RN */
+        border-width: 2px !important;
+    }
+    .fc .fc-timegrid-now-indicator-arrow {
+        border-top-color: #6AC64F !important; /* Flechita indicadora en Verde RN */
+        border-bottom-color: #6AC64F !important;
     }
     
     </style>
@@ -310,12 +333,12 @@ with tab1:
     
     # 📌 PALETA DE COLORES ADAPTADA - CERO ROJO:
     colores_prioridad = {
-        "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)[cite: 1]
-        "INTERMEDIA": "#333333", # Gris Carbón (Representa la seriedad y formalidad)
-        "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)[cite: 1]
+        "ALTA": "#007BE0",       # Azul RN Oficial
+        "INTERMEDIA": "#333333", # Gris Carbón
+        "BAJA": "#6AC64F"        # Verde RN Oficial
     }
     
-    # Color especial púrpura para destacar eventos con Invitación formal a participar
+    # Color especial Azul RN oficial para destacar eventos con Invitación formal a participar
     COLOR_CON_INVITACION = "#8E44AD" 
     
     for idx, row in st.session_state.agenda.iterrows():
@@ -403,168 +426,3 @@ if es_editor and tab2 is not None:
             
             with col1:
                 f_fecha = st.date_input("Fecha programada", datetime.today())
-                f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
-                f_localidad = st.text_input("Localidad", placeholder="Ej: General Roca")
-                f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
-                
-            with col2:
-                f_prioridad = st.selectbox("Nivel de Prioridad", ["ALTA", "INTERMEDIA", "BAJA"])
-                f_estado = st.selectbox("Estado Actual", ["Pendiente", "En curso", "Finalizado", "Suspendido"])
-                f_publico = st.text_input("Público Objetivo", placeholder="Ej: Jóvenes y adultos")
-                f_invitacion = st.text_input("Invitación a participar", placeholder="Ej: Gobernador + Secretaria de EEYA")
-                f_descripcion = st.text_area("Descripción de la acción / Notas")
-                
-            submitted = st.form_submit_button("💾 Guardar en la Agenda")
-            
-            if submitted:
-                if not f_actividad or not f_localidad:
-                    st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Localidad'.")
-                else:
-                    nueva_actividad = {
-                        "Fecha": str(f_fecha),
-                        "Semana": int(f_fecha.isocalendar()[1]),
-                        "Actividad": f_actividad,
-                        "Localidad": f_localidad.strip(),
-                        "Organismo/Actor": f_organismo,
-                        "Descripción": f_descripcion,
-                        "Estado": f_estado,
-                        "Público Destinatario": f_publico,
-                        "Prioridad": f_prioridad,
-                        "Invitación a participar": f_invitacion
-                    }
-                    
-                    st.session_state.agenda = pd.concat([st.session_state.agenda, pd.DataFrame([nueva_actividad])], ignore_index=True)
-                    st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                    st.success(f"¡Excelente! '{f_actividad}' ha sido guardada exitosamente.")
-                    st.rerun()
-
-# ------------------------------------------
-# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES (Solo visible para Editores)
-# ------------------------------------------
-if es_editor and tab3 is not None:
-    with tab3:
-        st.header("Editar / Cancelar Actividades")
-        
-        df_agenda = st.session_state.agenda.copy()
-        
-        if len(df_agenda) > 0:
-            st.write("Selecciona una actividad de la lista para corregir sus datos o darla de baja:")
-            
-            opciones_actividades = []
-            for idx, row in df_agenda.iterrows():
-                opciones_actividades.append(f"{idx} | [{row['Localidad']}] {row['Actividad']} ({row['Fecha']})")
-                
-            actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
-            
-            if actividad_seleccionada:
-                idx_seleccionado = int(actividad_seleccionada.split(" | ")[0])
-                registro_actual = df_agenda.loc[idx_seleccionado]
-                
-                st.info(f"Modificando el registro de la fila {idx_seleccionado}")
-                
-                with st.form("form_edicion"):
-                    col1_ed, col2_ed = st.columns(2)
-                    
-                    with col1_ed:
-                        try:
-                            fecha_previa = datetime.strptime(limpiar_fecha_para_calendario(registro_actual['Fecha']), "%Y-%m-%d").date()
-                        except:
-                            fecha_previa = datetime.today().date()
-                            
-                        ed_fecha = st.date_input("Fecha", value=fecha_previa)
-                        ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
-                        ed_localidad = st.text_input("Localidad", value=str(registro_actual['Localidad']))
-                        ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
-                        
-                    with col2_ed:
-                        opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
-                        def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
-                        
-                        opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
-                        def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
-                        
-                        ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
-                        ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
-                        ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
-                        ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
-                        ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
-                    
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        boton_actualizar = st.form_submit_button("🔄 Actualizar Cambios")
-                    with col_btn2:
-                        boton_eliminar = st.form_submit_button("❌ Eliminar Actividad permanentemente")
-                        
-                    if boton_actualizar:
-                        st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = str(ed_fecha)
-                        st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
-                        st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
-                        st.session_state.agenda.at[idx_seleccionado, 'Localidad'] = ed_localidad.strip()
-                        st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
-                        st.session_state.agenda.at[idx_seleccionado, 'Descripción'] = ed_descripcion
-                        st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
-                        st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
-                        st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
-                        st.session_state.agenda.at[idx_seleccionado, 'Invitación a participar'] = ed_invitacion
-                        
-                        st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                        st.success("¡Actividad actualizada con éxito!")
-                        st.rerun()
-                        
-                    if boton_eliminar:
-                        st.session_state.agenda = st.session_state.agenda.drop(idx_seleccionado).reset_index(drop=True)
-                        st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                        st.warning("La actividad ha sido eliminada del sistema.")
-                        st.rerun()
-        else:
-            st.warning("No hay actividades registradas en la base de datos para editar.")
-
-# ------------------------------------------
-# TAB 4: TABLA DE DATOS, BUSCADOR Y EXPORTACIÓN (Disponible para todos)
-# ------------------------------------------
-with tab4:
-    st.header("Buscador y Reportes")
-    
-    df_filtrado = st.session_state.agenda.copy()
-    
-    if len(df_filtrado) > 0:
-        col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
-        with col_f2:
-            localidades_unicas = sorted(list(df_filtrado['Localidad'].astype(str).str.strip().unique()))
-            list_localidades = ["Todas"] + [loc for loc in localidades_unicas if loc != 'nan' and loc != '']
-            filtro_localidad = st.selectbox("Filtrar por Localidad", list_localidades, key="filter_loc_tab4")
-            
-        # Filtrar localidad
-        if filtro_localidad != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Localidad'].str.strip() == filtro_localidad]
-            
-        # Filtrar palabra clave
-        if search_query:
-            df_filtrado = df_filtrado[
-                df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Descripción'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Invitación a participar'].astype(str).str.lower().str.contains(search_query)
-            ]
-            
-        # Renderizado de la tabla
-        st.dataframe(df_filtrado, use_container_width=True)
-        
-        # Exportador a Excel seguro
-        import io
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_filtrado.to_excel(writer, index=False, sheet_name='Agenda')
-        excel_bytes = output.getvalue()
-        
-        st.download_button(
-            label="📥 Descargar datos filtrados a Excel",
-            data=excel_bytes,
-            file_name="agenda_territorial_filtrada.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="btn_download_tab4"
-        )
-    else:
-        st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
