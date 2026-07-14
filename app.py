@@ -42,7 +42,7 @@ with tab2:
             publico = st.text_input("Público Destinatario", placeholder="Ej: PyMEs, Estudiantes")
             descripcion = st.text_area("Descripción detallada")
         
-        submitted = st.form_submit_submit("Guardar en Agenda")
+        submitted = st.form_submit_button("Guardar en Agenda")
         if submitted:
             nueva_fila = {
                 'Fecha': str(fecha),
