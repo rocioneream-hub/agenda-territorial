@@ -184,9 +184,9 @@ if 'agenda' not in st.session_state:
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo ahora carga el nuevo archivo 'isologo_RN.png' y utiliza el ancho del contenedor para evitar pixelación
+# El logo se muestra arriba del todo con un tamaño mediano y elegante
 if os.path.exists(LOGO_FILE):
-    st.image(LOGO_FILE, use_container_width=False)
+    st.image(LOGO_FILE, width=180)
 else:
     st.info("Logotipo Río Negro")
 
