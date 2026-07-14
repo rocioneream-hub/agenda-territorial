@@ -26,8 +26,9 @@ st.markdown("""
     }
     
     /* Fondo general utilizando estrictamente el Gris RN oficial (#E8E8E8) */
-    .stApp, .main, [data-testid="stAppViewContainer"] { 
+    .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"] { 
         background-color: #E8E8E8 !important; 
+        background: #E8E8E8 !important;
     }
     
     /* Diseño de tarjetas y formularios (Fondo blanco rígido y bordes limpios) */
@@ -76,42 +77,68 @@ st.markdown("""
     }
 
     /* ==========================================
-       PERSONALIZACIÓN CSS PARA EL CALENDARIO (FULLCALENDAR)
+       PERSONALIZACIÓN CSS ULTRA-AGRESIVA PARA EL CALENDARIO (FULLCALENDAR)
        ========================================== */
     
-    /* Botones estándar de navegación y de vista del calendario (Estilo Azul RN) */
-    .fc .fc-button-primary {
+    /* 1. Forzar color Azul RN en absolutamente todos los botones nativos del calendario */
+    .fc .fc-button,
+    .fc .fc-button-primary,
+    .fc-button,
+    .fc-button-primary,
+    button.fc-button,
+    button.fc-today-button,
+    button.fc-prev-button,
+    button.fc-next-button {
         background-color: #007BE0 !important;
+        background: #007BE0 !important;
         border-color: #007BE0 !important;
         color: #FFFFFF !important;
+        opacity: 1 !important;
+        box-shadow: none !important;
         font-family: 'Figtree', sans-serif !important;
         font-weight: 600 !important;
         text-transform: capitalize !important;
-        box-shadow: none !important;
         transition: background-color 0.2s ease, border-color 0.2s ease !important;
     }
 
-    /* Efecto Hover en los botones del calendario (Verde RN) */
-    .fc .fc-button-primary:hover {
+    /* 2. Forzar fondo Verde RN al pasar el mouse (Hover) por encima de los botones del calendario */
+    .fc .fc-button:hover,
+    .fc .fc-button-primary:hover,
+    .fc-button:hover,
+    .fc-button-primary:hover,
+    button.fc-button:hover,
+    button.fc-today-button:hover,
+    button.fc-prev-button:hover,
+    button.fc-next-button:hover {
         background-color: #6AC64F !important;
+        background: #6AC64F !important;
         border-color: #6AC64F !important;
-    }
-
-    /* Estado de botón activo o seleccionado (Ej: vista "Mes" seleccionada) */
-    .fc .fc-button-primary:not(:disabled).fc-button-active, 
-    .fc .fc-button-primary:not(:disabled):active {
-        background-color: #00569e !important; /* Azul RN oscuro para el estado activo */
-        border-color: #00569e !important;
-    }
-
-    /* Botón deshabilitado del calendario */
-    .fc .fc-button-primary:disabled {
-        background-color: #b3d7f5 !important;
-        border-color: #b3d7f5 !important;
         color: #FFFFFF !important;
     }
 
-    /* Personalización de los encabezados de los días en el calendario */
+    /* 3. Forzar fondo Azul RN Oscuro para el botón de vista activa o seleccionada */
+    .fc .fc-button-primary:not(:disabled).fc-button-active, 
+    .fc .fc-button-primary:not(:disabled):active,
+    .fc-button-active,
+    button.fc-button-active,
+    .fc .fc-button-primary:active {
+        background-color: #00569E !important;
+        background: #00569E !important;
+        border-color: #00569E !important;
+        color: #FFFFFF !important;
+    }
+
+    /* 4. Color de botones deshabilitados del calendario */
+    .fc .fc-button-primary:disabled,
+    .fc-button:disabled {
+        background-color: #b3d7f5 !important;
+        background: #b3d7f5 !important;
+        border-color: #b3d7f5 !important;
+        color: #FFFFFF !important;
+        opacity: 0.7 !important;
+    }
+
+    /* 5. Personalización de los encabezados de los días en el calendario */
     .fc .fc-col-header-cell-cushion {
         color: #000000 !important;
         font-weight: 700 !important;
@@ -275,15 +302,16 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
-    # Paleta de colores oficial por Prioridad
+    
+    # PALETA DE COLORES ADAPTADA A LA IDENTIDAD VISUAL DE RÍO NEGRO:
     colores_prioridad = {
-        "ALTA": "#E74C3C",       # Rojo
-        "INTERMEDIA": "#F39C12", # Naranja
-        "BAJA": "#6AC64F"        # Verde RN Oficial
+        "ALTA": "#007BE0",       # Azul RN (Asociado a los lagos y recursos acuíferos)
+        "INTERMEDIA": "#333333", # Gris Carbón (Representa la franja de la bandera/nombre)
+        "BAJA": "#6AC64F"        # Verde RN (Simboliza la esperanza y riqueza de la tierra)
     }
     
     # Color especial Azul RN oficial para destacar eventos con Invitación formal a participar
-    COLOR_CON_INVITACION = "#007BE0" 
+    COLOR_CON_INVITACION = "#8E44AD" 
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
@@ -293,12 +321,12 @@ with tab1:
             invitacion_val = str(row.get('Invitación a participar', '')).strip()
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
-            # Si tiene invitación, asignamos el azul RN y el emoji de sobre.
+            # Si tiene invitación, asignamos el púrpura y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
                 titulo_mostrar = f"✉️ [{row['Localidad']}] {row['Actividad']}"
             else:
-                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#000000")
+                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
                 titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
                 
             events.append({
