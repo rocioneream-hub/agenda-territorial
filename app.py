@@ -271,7 +271,7 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        # Asegurar que existan todas las columnas requeridas (añadimos la columna de Hora)
+        # Asegurar que existan todas las columnas requeridas
         columnas_requeridas = [
             'Fecha', 'Hora', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
             'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
@@ -355,15 +355,15 @@ with tab1:
     
     events = []
     
-    # PALETA DE COLORES ADAPTADA:
+    # 📌 PALETA DE COLORES ADAPTADA:
     colores_prioridad = {
         "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)
         "INTERMEDIA": "#333333", # Gris Carbón (Representa seriedad y formalidad)
         "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)
     }
     
-    # Color Azul Celeste brillante para invitaciones especiales
-    COLOR_CON_INVITACION = "#3498DB" 
+    # Color Naranja Vibrante para destacar invitaciones especiales de manera inequívoca
+    COLOR_CON_INVITACION = "#FF7A00" 
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
@@ -378,7 +378,7 @@ with tab1:
             tiene_hora = hora_val != "" and hora_val.lower() != "nan"
             prefijo_hora = f"{hora_val} hs - " if tiene_hora else ""
             
-            # Si tiene invitación, asignamos el Celeste brillante y el emoji de sobre.
+            # Si tiene invitación, asignamos el Naranja y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
                 titulo_mostrar = f"✉️ {prefijo_hora}[{row['Localidad']}] {row['Actividad']}"
