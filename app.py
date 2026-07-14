@@ -5,16 +5,50 @@ from datetime import datetime
 import re
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
+# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (DISEÑO)
 # ==========================================
-st.set_page_config(layout="wide", page_title="Agenda Territorial", page_icon="🗺️")
+st.set_page_config(
+    layout="wide", 
+    page_title="Portal de Gestión - UPEU", 
+    page_icon="📈"
+)
 
+# Estilos CSS avanzados para personalizar colores y diseño
 st.markdown("""
     <style>
-    .main { background-color: #f8f9fa; }
-    div[data-testid="stForm"] { background-color: white; border-radius: 10px; padding: 30px; box-shadow: 0px 4px 12px rgba(0, 0, 0, 0.05); }
-    h1 { color: #1E3A8A; font-weight: 700; }
-    h2 { color: #2C3E50; }
+    /* Fondo general de la aplicación */
+    .main { 
+        background-color: #f1f5f9; 
+    }
+    
+    /* Diseño de las tarjetas de formularios (Carga y Edición) */
+    div[data-testid="stForm"] { 
+        background-color: #ffffff; 
+        border-radius: 12px; 
+        padding: 30px; 
+        box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.05), 0px 4px 6px -2px rgba(0, 0, 0, 0.05);
+        border: 1px solid #e2e8f0;
+    }
+    
+    /* Títulos principales (Azul Ejecutivo) */
+    h1 { 
+        color: #0f172a !important; 
+        font-weight: 800 !important;
+    }
+    
+    /* Subtítulos */
+    h2, h3 { 
+        color: #1e3a8a !important; 
+        font-weight: 700 !important;
+    }
+    
+    /* Estilo del botón primario de guardar */
+    button[kind="primary"] {
+        background-color: #1e3a8a !important;
+        color: white !important;
+        border-radius: 8px !important;
+        border: none !important;
+    }
     </style>
 """, unsafe_allow_html=True)
 
@@ -53,7 +87,7 @@ def limpiar_fecha_para_calendario(val):
     return None
 
 def load_data():
-    """Carga el Excel, elimina las filas vacías 'fantasmas' y limpia nulos."""
+    """Carga el Excel, elimina las filas vacías y limpia nulos de todas las columnas, incluida Invitación."""
     try:
         df = pd.read_excel(EXCEL_FILE)
         
@@ -67,24 +101,32 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        columnas_requeridas = ['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad']
+        # Definimos las columnas que requerimos (agregando Invitación a participar)
+        columnas_requeridas = [
+            'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
+            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar '
+        ]
         for col in columnas_requeridas:
             if col not in df.columns:
                 df[col] = ""
                 
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
-        df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str).str.strip() # Limpiamos espacios extras
+        df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str).str.strip()
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
         df['Descripción'] = df['Descripción'].fillna("").astype(str)
         df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
         df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
         df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
+        df['Invitación a participar '] = df['Invitación a participar '].fillna("").astype(str)
         
         return df.reset_index(drop=True)
         
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
-        return pd.DataFrame(columns=['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad'])
+        return pd.DataFrame(columns=[
+            'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
+            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar '
+        ])
 
 # Inicializar o forzar la carga de la agenda
 if 'agenda' not in st.session_state:
@@ -93,14 +135,15 @@ if 'agenda' not in st.session_state:
 # ==========================================
 # 3. DISEÑO DE LA INTERFAZ DE USUARIO
 # ==========================================
-st.title("🗺️ Agenda Territorial - UPEU")
+col_title_left, col_title_right = st.columns([3, 1])
 
-# Botón de rescate: limpia la caché si algo se congela
-col_head1, col_head2 = st.columns([4, 1])
-with col_head1:
-    st.write("Herramienta colaborativa para la carga, modificación y visualización en tiempo real de actividades.")
-with col_head2:
-    if st.button("🔄 Sincronizar Excel"):
+with col_title_left:
+    st.title("📈 Agenda de Planificación Territorial")
+    st.markdown("**Unidad Provincial de Enlace con Universidades (UPEU)** | Gobierno de Río Negro")
+with col_title_right:
+    st.write("")
+    st.write("")
+    if st.button("🔄 Sincronizar Excel", use_container_width=True):
         st.session_state.agenda = load_data()
         st.success("¡Base de datos sincronizada!")
         st.rerun()
@@ -142,7 +185,8 @@ with tab1:
                     "descripcion": str(row['Descripción']),
                     "estado": str(row['Estado']),
                     "publico": str(row['Público Destinatario']),
-                    "prioridad": str(row['Prioridad'])
+                    "prioridad": str(row['Prioridad']),
+                    "invitacion": str(row['Invitación a participar '])
                 }
             })
 
@@ -181,12 +225,13 @@ with tab1:
             with col_det2:
                 st.markdown(f"**🚨 Prioridad:** `{props.get('prioridad')}`")
                 st.markdown(f"**⚙️ Estado:** `{props.get('estado')}`")
+                st.markdown(f"**✉️ Invitación a participar:** `{props.get('invitacion')}`")
                 st.markdown(f"**📝 Descripción:** {props.get('descripcion')}")
     else:
         st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
 
 # ------------------------------------------
-# TAB 2: FORMULARIO DE CARGA DE DATOS
+# TAB 2: FORMULARIO DE CARGA DE DATOS (NUEVA ACTIVIDAD)
 # ------------------------------------------
 with tab2:
     st.header("Registrar Nueva Actividad")
@@ -197,15 +242,16 @@ with tab2:
         
         with col1:
             f_fecha = st.date_input("Fecha programada", datetime.today())
-            f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Entrega de Diplomas")
-            f_localidad = st.text_input("Localidad", placeholder="Ej: San Carlos de Bariloche")
-            f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Instituto Balseiro")
+            f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
+            f_localidad = st.text_input("Localidad", placeholder="Ej: General Roca")
+            f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
             
         with col2:
             f_prioridad = st.selectbox("Nivel de Prioridad", ["ALTA", "INTERMEDIA", "BAJA"])
             f_estado = st.selectbox("Estado Actual", ["Pendiente", "En curso", "Finalizado", "Suspendido"])
             f_publico = st.text_input("Público Objetivo", placeholder="Ej: Jóvenes y adultos")
-            f_descripcion = st.text_area("Descripción de la acción")
+            f_invitacion = st.text_input("Invitación a participar", placeholder="Ej: Gobernador + Secretaria de EEYA")
+            f_descripcion = st.text_area("Descripción de la acción / Notas")
             
         submitted = st.form_submit_button("💾 Guardar en la Agenda")
         
@@ -222,16 +268,17 @@ with tab2:
                     "Descripción": f_descripcion,
                     "Estado": f_estado,
                     "Público Destinatario": f_publico,
-                    "Prioridad": f_prioridad
+                    "Prioridad": f_prioridad,
+                    "Invitación a participar ": f_invitacion  # Guardamos la nueva columna
                 }
                 
                 st.session_state.agenda = pd.concat([st.session_state.agenda, pd.DataFrame([nueva_actividad])], ignore_index=True)
                 st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                st.success(f"¡Excelente! '{f_actividad}' ha sido guardada.")
+                st.success(f"¡Excelente! '{f_actividad}' ha sido guardada exitosamente.")
                 st.rerun()
 
 # ------------------------------------------
-# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES EXISTENTES
+# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES
 # ------------------------------------------
 with tab3:
     st.header("Editar / Cancelar Actividades")
@@ -277,6 +324,7 @@ with tab3:
                     ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
                     ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
                     ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
+                    ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar ', '')))
                     ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
                 
                 col_btn1, col_btn2 = st.columns(2)
@@ -295,6 +343,7 @@ with tab3:
                     st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
                     st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
                     st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
+                    st.session_state.agenda.at[idx_seleccionado, 'Invitación a participar '] = ed_invitacion
                     
                     st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
                     st.success("¡Actividad actualizada con éxito!")
@@ -314,7 +363,6 @@ with tab3:
 with tab4:
     st.header("Buscador y Reportes")
     
-    # Leemos la base directa para asegurar que no muestre una vista desactualizada
     df_filtrado = st.session_state.agenda.copy()
     
     if len(df_filtrado) > 0:
@@ -322,7 +370,6 @@ with tab4:
         with col_f1:
             search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
         with col_f2:
-            # Quitamos duplicados y ordenamos localidades limpias
             localidades_unicas = sorted(list(df_filtrado['Localidad'].astype(str).str.strip().unique()))
             list_localidades = ["Todas"] + [loc for loc in localidades_unicas if loc != 'nan' and loc != '']
             filtro_localidad = st.selectbox("Filtrar por Localidad", list_localidades, key="filter_loc_tab4")
@@ -336,7 +383,8 @@ with tab4:
             df_filtrado = df_filtrado[
                 df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
                 df_filtrado['Descripción'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query)
+                df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Invitación a participar '].astype(str).str.lower().str.contains(search_query)
             ]
             
         # Renderizado de la tabla
