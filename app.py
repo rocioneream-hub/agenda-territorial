@@ -74,6 +74,50 @@ st.markdown("""
         font-weight: 800;
         font-size: 1.1rem;
     }
+
+    /* ==========================================
+       PERSONALIZACIÓN CSS PARA EL CALENDARIO (FULLCALENDAR)
+       ========================================== */
+    
+    /* Botones estándar de navegación y de vista del calendario (Estilo Azul RN) */
+    .fc .fc-button-primary {
+        background-color: #007BE0 !important;
+        border-color: #007BE0 !important;
+        color: #FFFFFF !important;
+        font-family: 'Figtree', sans-serif !important;
+        font-weight: 600 !important;
+        text-transform: capitalize !important;
+        box-shadow: none !important;
+        transition: background-color 0.2s ease, border-color 0.2s ease !important;
+    }
+
+    /* Efecto Hover en los botones del calendario (Verde RN) */
+    .fc .fc-button-primary:hover {
+        background-color: #6AC64F !important;
+        border-color: #6AC64F !important;
+    }
+
+    /* Estado de botón activo o seleccionado (Ej: vista "Mes" seleccionada) */
+    .fc .fc-button-primary:not(:disabled).fc-button-active, 
+    .fc .fc-button-primary:not(:disabled):active {
+        background-color: #00569e !important; /* Azul RN oscuro para el estado activo */
+        border-color: #00569e !important;
+    }
+
+    /* Botón deshabilitado del calendario */
+    .fc .fc-button-primary:disabled {
+        background-color: #b3d7f5 !important;
+        border-color: #b3d7f5 !important;
+        color: #FFFFFF !important;
+    }
+
+    /* Personalización de los encabezados de los días en el calendario */
+    .fc .fc-col-header-cell-cushion {
+        color: #000000 !important;
+        font-weight: 700 !important;
+        text-decoration: none !important;
+    }
+    
     </style>
 """, unsafe_allow_html=True)
 
@@ -184,7 +228,7 @@ if 'agenda' not in st.session_state:
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se muestra arriba del todo con un tamaño mediano y elegante
+# El logo se muestra con un tamaño mediano y elegante de 180px para evitar pixelaciones
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, width=180)
 else:
