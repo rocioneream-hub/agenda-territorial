@@ -44,6 +44,7 @@ st.markdown("""
         color: #000000 !important; 
         font-weight: 800 !important;
         font-size: 2.2rem !important;
+        margin-top: 10px !important;
         margin-bottom: 0px !important;
     }
     
@@ -180,17 +181,19 @@ if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
 
 # ==========================================
-# 4. DISEÑO DE LA INTERFAZ DE USUARIO (CON CABECERA Y LOGO)
+# 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
-col_logo, col_title_left, col_title_right = st.columns([1, 4, 1.5])
 
-with col_logo:
-    # Cargar logo de UPEU si existe en el repositorio con la medida perfecta recomendada
-    if os.path.exists(LOGO_FILE):
-        st.image(LOGO_FILE, width=220)
-    else:
-        # Cuadro gris de respaldo
-        st.info("Logotipo UPEU")
+# El logo se muestra arriba del todo, alineado a la izquierda, sin columnas que lo aprieten.
+if os.path.exists(LOGO_FILE):
+    st.image(LOGO_FILE, width=240)
+else:
+    st.info("Logotipo UPEU")
+
+st.markdown("---")  # Línea sutil divisoria debajo del logo oficial
+
+# Ahora sí, por debajo empieza la estructura de títulos y la app
+col_title_left, col_title_right = st.columns([4, 1.5])
 
 with col_title_left:
     st.title("Agenda de Planificación Territorial")
@@ -198,6 +201,7 @@ with col_title_left:
     st.markdown("<span class='hashtag-gestion'>#orgulloríonegro</span>", unsafe_allow_html=True) 
 
 with col_title_right:
+    st.write("")
     st.write("")
     if st.button("🔄 Sincronizar Excel", use_container_width=True):
         st.session_state.agenda = load_data()
