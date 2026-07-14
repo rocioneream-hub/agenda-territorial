@@ -5,49 +5,71 @@ from datetime import datetime
 import re
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (DISEÑO)
+# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
 # ==========================================
 st.set_page_config(
     layout="wide", 
-    page_title="Portal de Gestión - UPEU", 
+    page_title="Portal de Gestión - Gobierno de Río Negro", 
     page_icon="📈"
 )
 
-# Estilos CSS avanzados para personalizar colores y diseño
+# Inyección de estilos CSS basados estrictamente en el Manual de Marca de Río Negro
 st.markdown("""
     <style>
-    /* Fondo general de la aplicación */
+    /* Importación de la tipografía oficial Figtree */
+    @import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap');
+    
+    /* Configuración de fuentes globales */
+    html, body, [class*="css"], .stMarkdown, p, div {
+        font-family: 'Figtree', sans-serif !important;
+    }
+    
+    /* Fondo general utilizando el Gris RN oficial (#E8E8E8) */
     .main { 
-        background-color: #f1f5f9; 
+        background-color: #E8E8E8 !important; 
     }
     
-    /* Diseño de las tarjetas de formularios (Carga y Edición) */
+    /* Diseño de tarjetas y formularios (Fondo blanco rígido y bordes limpios) */
     div[data-testid="stForm"] { 
-        background-color: #ffffff; 
-        border-radius: 12px; 
-        padding: 30px; 
-        box-shadow: 0px 10px 15px -3px rgba(0, 0, 0, 0.05), 0px 4px 6px -2px rgba(0, 0, 0, 0.05);
-        border: 1px solid #e2e8f0;
+        background-color: #FFFFFF !important; 
+        border-radius: 8px !important; 
+        padding: 30px !important; 
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.05) !important;
+        border: 1px solid #D1D5DB !important;
     }
     
-    /* Títulos principales (Azul Ejecutivo) */
+    /* Títulos Principales en Negro Puro */
     h1 { 
-        color: #0f172a !important; 
+        color: #000000 !important; 
         font-weight: 800 !important;
+        font-size: 2.2rem !important;
     }
     
-    /* Subtítulos */
+    /* Subtítulos en el Azul RN oficial (#007BE0) */
     h2, h3 { 
-        color: #1e3a8a !important; 
+        color: #007BE0 !important; 
         font-weight: 700 !important;
     }
     
-    /* Estilo del botón primario de guardar */
+    /* Estilo del botón primario con el Verde RN oficial (#6AC64F) */
     button[kind="primary"] {
-        background-color: #1e3a8a !important;
-        color: white !important;
-        border-radius: 8px !important;
+        background-color: #6AC64F !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border-radius: 6px !important;
         border: none !important;
+        transition: background-color 0.2s ease;
+    }
+    
+    button[kind="primary"]:hover {
+        background-color: #59b040 !important; /* Verde RN ligeramente más oscuro para el hover */
+    }
+    
+    /* Hashtag de gestión oficial #orgulloríonegro */
+    .hashtag-gestion {
+        color: #6AC64F !important;
+        font-weight: 800;
+        font-size: 1.1rem;
     }
     </style>
 """, unsafe_allow_html=True)
@@ -61,7 +83,7 @@ EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
 st.sidebar.header("🔑 Control de Acceso")
 password = st.sidebar.text_input("Contraseña de Editor", type="password")
 
-# 📌 Podés cambiar la contraseña escribiendo otra acá:
+# Contraseña de seguridad para la edición
 CONTRASEÑA_CORRECTA = "UPEU2026" 
 
 es_editor = (password == CONTRASEÑA_CORRECTA)
@@ -106,7 +128,7 @@ def limpiar_fecha_para_calendario(val):
     return None
 
 def load_data():
-    """Carga el Excel, normaliza nombres de columnas, elimina filas vacías y limpia nulos."""
+    """Carga el Excel, normaliza nombres de columnas, elimina filas fantasma y limpia nulos."""
     try:
         df = pd.read_excel(EXCEL_FILE)
         
@@ -162,6 +184,7 @@ col_title_left, col_title_right = st.columns([3, 1])
 with col_title_left:
     st.title("📈 Agenda de Planificación Territorial")
     st.markdown("**Unidad Provincial de Enlace con Universidades (UPEU)** | Gobierno de Río Negro")
+    st.markdown("<span class='hashtag-gestion'>#orgulloríonegro</span>", unsafe_allow_html=True) # Hashtag Oficial
 with col_title_right:
     st.write("")
     st.write("")
@@ -193,14 +216,15 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
+    # Paleta de colores oficial por Prioridad
     colores_prioridad = {
         "ALTA": "#E74C3C",       # Rojo
         "INTERMEDIA": "#F39C12", # Naranja
-        "BAJA": "#2ECC71"        # Verde
+        "BAJA": "#6AC64F"        # Verde RN Oficial
     }
     
-    # Color especial púrpura para destacar eventos con Invitación formal
-    COLOR_CON_INVITACION = "#8E44AD" 
+    # Color especial Azul RN para destacar eventos con Invitación formal a participar
+    COLOR_CON_INVITACION = "#007BE0" 
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
@@ -210,12 +234,12 @@ with tab1:
             invitacion_val = str(row.get('Invitación a participar', '')).strip()
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
-            # Si tiene invitación, le asignamos el color púrpura. Si no, su color de prioridad.
+            # Si tiene invitación, le asignamos el color azul RN. Si no, su color de prioridad.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
                 titulo_mostrar = f"✉️ [{row['Localidad']}] {row['Actividad']}"
             else:
-                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#34495E")
+                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#000000")
                 titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
                 
             events.append({
