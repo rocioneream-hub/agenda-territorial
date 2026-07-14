@@ -10,8 +10,8 @@ import os
 # ==========================================
 st.set_page_config(
     layout="wide", 
-    page_title="Portal de Gestión - Gobierno de Río Negro", 
-    page_icon="📈"
+    page_title="Calendario territorial UPEU", 
+    page_icon="🗓️"
 )
 
 # Inyección de estilos CSS basados estrictamente en el Manual de Marca de Río Negro
