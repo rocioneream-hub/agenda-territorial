@@ -256,5 +256,3 @@ with tab3:
             registro_actual = df_agenda.loc[idx_seleccionado]
             
             st.info(f"Modificando el registro de la fila {idx_seleccionado}")
-            
-            with
