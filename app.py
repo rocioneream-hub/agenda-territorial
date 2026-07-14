@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_calendar import calendar
-from datetime import datetime
+from datetime import datetime, time
 import re
 import os
 
@@ -76,6 +76,12 @@ st.markdown("""
         font-size: 1.1rem;
     }
 
+    /* Forzar nitidez absoluta en el renderizado de imágenes (Evita pixelación) */
+    img {
+        image-rendering: -webkit-optimize-contrast !important;
+        image-rendering: crisp-edges !important;
+    }
+
     /* ==========================================
        ANULAR EL ROJO NATIVO DE STREAMLIT (TABS Y SELECCIONES)
        ========================================== */
@@ -91,7 +97,7 @@ st.markdown("""
         color: #333333 !important;
     }
 
-    /* Cambiar el borde rojo/coral de enfoque en inputs y dropdowns a Azul RN */
+    /* Cambiar el borde de enfoque en inputs y dropdowns a Azul RN */
     .stTextInput input:focus, 
     .stSelectbox div[role="button"]:focus, 
     .stTextArea textarea:focus,
@@ -145,7 +151,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* Botón activo seleccionado */
+    /* Botón activo seleccionado (Azul RN Oscuro) */
     .fc .fc-button-primary:not(:disabled).fc-button-active, 
     .fc .fc-button-primary:not(:disabled):active,
     .fc-button-active,
@@ -157,7 +163,7 @@ st.markdown("""
         color: #FFFFFF !important;
     }
 
-    /* Cabeceras de los días */
+    /* Cabeceras de los días del calendario */
     .fc .fc-col-header-cell-cushion {
         color: #000000 !important;
         font-weight: 700 !important;
@@ -168,7 +174,7 @@ st.markdown("""
         border-color: transparent !important;
     }
 
-    /* Día de hoy (sutil celeste transparente y número azul) */
+    /* Día de hoy (celeste muy sutil y número azul) */
     .fc .fc-daygrid-day.fc-day-today {
         background-color: rgba(0, 123, 224, 0.08) !important;
     }
@@ -265,9 +271,9 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        # Asegurar que existan todas las columnas requeridas
+        # Asegurar que existan todas las columnas requeridas (añadimos la columna de Hora)
         columnas_requeridas = [
-            'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
+            'Fecha', 'Hora', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
             'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ]
         for col in columnas_requeridas:
@@ -275,6 +281,7 @@ def load_data():
                 df[col] = ""
                 
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
+        df['Hora'] = df['Hora'].fillna("").astype(str).str.strip()
         df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str).str.strip()
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
         df['Descripción'] = df['Descripción'].fillna("").astype(str)
@@ -288,7 +295,7 @@ def load_data():
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         return pd.DataFrame(columns=[
-            'Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
+            'Fecha', 'Hora', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
             'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ])
 
@@ -300,15 +307,15 @@ if 'agenda' not in st.session_state:
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se muestra con un tamaño mediano y elegante de 180px para evitar pixelaciones
+# El logo se renderiza con un ancho elegante de 180px y CSS para evitar la pixelación
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, width=180)
 else:
     st.info("Logotipo Río Negro")
 
-st.markdown("---")  # Línea sutil divisoria debajo del logo oficial
+st.markdown("---")  # Línea divisoria bajo el logo oficial
 
-# Cabecera de títulos y aplicación
+# Cabecera de títulos de la app
 col_title_left, col_title_right = st.columns([4, 1.5])
 
 with col_title_left:
@@ -324,7 +331,7 @@ with col_title_right:
         st.success("¡Base de datos sincronizada!")
         st.rerun()
 
-# Definición dinámica de pestañas dependiendo de si el usuario ingresó la contraseña
+# Pestañas condicionales según el rol del usuario (Editor / Lector)
 if es_editor:
     tab1, tab2, tab3, tab4 = st.tabs([
         "🗓️ Vista de Calendario", 
@@ -348,15 +355,15 @@ with tab1:
     
     events = []
     
-    # 📌 PALETA DE COLORES ADAPTADA - CERO ROJO:
+    # 📌 PALETA DE COLORES ADAPTADA - CERO ROJO O PÚRPURA:
     colores_prioridad = {
-        "ALTA": "#007BE0",       # Azul RN Oficial
-        "INTERMEDIA": "#333333", # Gris Carbón
-        "BAJA": "#6AC64F"        # Verde RN Oficial[cite: 1]
+        "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)
+        "INTERMEDIA": "#333333", # Gris Carbón (Representa seriedad y formalidad)
+        "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)
     }
     
-    # Color especial púrpura para destacar eventos con Invitación formal a participar
-    COLOR_CON_INVITACION = "#8E44AD" 
+    # Color Azul Celeste brillante para invitaciones especiales (NO PÚRPURA)
+    COLOR_CON_INVITACION = "#3498DB" 
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
@@ -366,13 +373,18 @@ with tab1:
             invitacion_val = str(row.get('Invitación a participar', '')).strip()
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
-            # Si tiene invitación, asignamos el púrpura y el emoji de sobre.
+            # Formatear la hora para el título si existe
+            hora_val = str(row.get('Hora', '')).strip()
+            tiene_hora = hora_val != "" and hora_val.lower() != "nan"
+            prefijo_hora = f"{hora_val} hs - " if tiene_hora else ""
+            
+            # Si tiene invitación, asignamos el Celeste brillante y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
-                titulo_mostrar = f"✉️ [{row['Localidad']}] {row['Actividad']}"
+                titulo_mostrar = f"✉️ {prefijo_hora}[{row['Localidad']}] {row['Actividad']}"
             else:
                 color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
-                titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
+                titulo_mostrar = f"{prefijo_hora}[{row['Localidad']}] {row['Actividad']}"
                 
             events.append({
                 "title": titulo_mostrar,
@@ -381,6 +393,7 @@ with tab1:
                 "color": color_evento,
                 "extendedProps": {
                     "fecha_original": str(row['Fecha']),
+                    "hora": hora_val if tiene_hora else "No especificada",
                     "organismo": str(row['Organismo/Actor']),
                     "descripcion": str(row['Descripción']),
                     "estado": str(row['Estado']),
@@ -420,6 +433,7 @@ with tab1:
             with col_det1:
                 st.markdown(f"**📌 Actividad:** {clicked['title']}")
                 st.markdown(f"**📅 Fecha original:** `{props.get('fecha_original')}`")
+                st.markdown(f"**⏰ Hora:** `{props.get('hora')}`")
                 st.markdown(f"**🏢 Organismo/Actor:** {props.get('organismo')}")
                 st.markdown(f"**🎯 Público Destinatario:** {props.get('publico')}")
             with col_det2:
@@ -443,6 +457,7 @@ if es_editor and tab2 is not None:
             
             with col1:
                 f_fecha = st.date_input("Fecha programada", datetime.today())
+                f_hora = st.time_input("Hora del evento", value=time(9, 0)) # Campo para registrar la hora de inicio
                 f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
                 f_localidad = st.text_input("Localidad", placeholder="Ej: General Roca")
                 f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
@@ -460,8 +475,12 @@ if es_editor and tab2 is not None:
                 if not f_actividad or not f_localidad:
                     st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Localidad'.")
                 else:
+                    # Formatear la hora seleccionada como HH:MM
+                    hora_formateada = f_hora.strftime("%H:%M")
+                    
                     nueva_actividad = {
                         "Fecha": str(f_fecha),
+                        "Hora": hora_formateada,
                         "Semana": int(f_fecha.isocalendar()[1]),
                         "Actividad": f_actividad,
                         "Localidad": f_localidad.strip(),
@@ -512,6 +531,15 @@ if es_editor and tab3 is not None:
                             fecha_previa = datetime.today().date()
                             
                         ed_fecha = st.date_input("Fecha", value=fecha_previa)
+                        
+                        # Manejo seguro de carga y edición del campo de Hora
+                        hora_previa_str = str(registro_actual.get('Hora', '09:00')).strip()
+                        try:
+                            hora_previa = datetime.strptime(hora_previa_str, "%H:%M").time()
+                        except:
+                            hora_previa = time(9, 0)
+                        ed_hora = st.time_input("Hora", value=hora_previa)
+                        
                         ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
                         ed_localidad = st.text_input("Localidad", value=str(registro_actual['Localidad']))
                         ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
@@ -537,6 +565,7 @@ if es_editor and tab3 is not None:
                         
                     if boton_actualizar:
                         st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = str(ed_fecha)
+                        st.session_state.agenda.at[idx_seleccionado, 'Hora'] = ed_hora.strftime("%H:%M")
                         st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
                         st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
                         st.session_state.agenda.at[idx_seleccionado, 'Localidad'] = ed_localidad.strip()
