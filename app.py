@@ -76,7 +76,7 @@ st.markdown("""
         font-size: 1.1rem;
     }
 
-    /* Forzar nitidez absoluta en el renderizado de imágenes (Evita pixelación) */
+    /* Forzar nitidez absoluta en el renderizado de imágenes vectoriales */
     img {
         image-rendering: -webkit-optimize-contrast !important;
         image-rendering: crisp-edges !important;
@@ -199,9 +199,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Nombre del archivo Excel que actúa como base de datos y logo personalizado actualizado
+# Nombre del archivo Excel que actúa como base de datos e ISOLOGO EN FORMATO VECTORIAL SVG
 EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
-LOGO_FILE = "isologo_RN.png"
+LOGO_FILE = "isologo_RN.svg"
 
 # ==========================================
 # 2. CONTROL DE ACCESO (MODO LECTOR / EDITOR)
@@ -307,11 +307,11 @@ if 'agenda' not in st.session_state:
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se renderiza con un ancho elegante de 180px y CSS para evitar la pixelación
+# El logo se renderiza en SVG con un ancho elegante de 180px para máxima definición
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, width=180)
 else:
-    st.info("Logotipo Río Negro")
+    st.info("Logotipo Río Negro (SVG)")
 
 st.markdown("---")  # Línea divisoria bajo el logo oficial
 
@@ -355,14 +355,14 @@ with tab1:
     
     events = []
     
-    # 📌 PALETA DE COLORES ADAPTADA - CERO ROJO O PÚRPURA:
+    # PALETA DE COLORES ADAPTADA:
     colores_prioridad = {
         "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)
         "INTERMEDIA": "#333333", # Gris Carbón (Representa seriedad y formalidad)
         "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)
     }
     
-    # Color Azul Celeste brillante para invitaciones especiales (NO PÚRPURA)
+    # Color Azul Celeste brillante para invitaciones especiales
     COLOR_CON_INVITACION = "#3498DB" 
     
     for idx, row in st.session_state.agenda.iterrows():
