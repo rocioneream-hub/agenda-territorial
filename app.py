@@ -26,23 +26,16 @@ EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
 # ==========================================
 
 def limpiar_fecha_para_calendario(val):
-    """
-    Toma fechas del Excel (incluso rangos como '17 y 18/07/2026') 
-    y devuelve una fecha limpia en formato YYYY-MM-DD para el calendario.
-    """
     val_str = str(val).strip()
     if not val_str or val_str == "nan" or val_str == "":
         return None
     
-    # 1. Si ya tiene formato ISO YYYY-MM-DD (con o sin hora)
     match_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", val_str)
     if match_iso:
         return match_iso.group(1)
         
-    # Limpiar espacios raros antes/después de las barras diagonales
     val_str = re.sub(r"\s*/\s*", "/", val_str)
         
-    # 2. Si es del tipo rango "17 y 18/07/2026" o "16 a 17/07/2026"
     match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{4})", val_str)
     if match_rango:
         dia = match_rango.group(1).zfill(2)
@@ -50,7 +43,6 @@ def limpiar_fecha_para_calendario(val):
         anio = match_rango.group(3)
         return f"{anio}-{mes}-{dia}"
         
-    # 3. Si es formato "DD/MM/YYYY" normal
     match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", val_str)
     if match_normal:
         dia = match_normal.group(1).zfill(2)
@@ -66,26 +58,22 @@ def load_data():
         df = pd.read_excel(EXCEL_FILE)
         
         # --- ELIMINACIÓN DE FILAS FANTASMA ---
-        # Si la fila tiene celdas vacías o solo espacios en 'Fecha' y 'Actividad', la descartamos
         df['_temp_fecha'] = df['Fecha'].astype(str).str.strip().replace('', None)
         df['_temp_actividad'] = df['Actividad'].astype(str).str.strip().replace('', None)
         
         df = df[
-            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan')) |
-            (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan'))
+            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan') & (df['_temp_fecha'] != '')) |
+            (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan') & (df['_temp_actividad'] != ''))
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
-        # -------------------------------------
 
-        # Aseguramos que existan todas las columnas requeridas
         columnas_requeridas = ['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad']
         for col in columnas_requeridas:
             if col not in df.columns:
                 df[col] = ""
                 
-        # Reemplazar valores nulos reales por textos limpios para evitar que se rompa la vista
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
-        df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str)
+        df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str).str.strip() # Limpiamos espacios extras
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
         df['Descripción'] = df['Descripción'].fillna("").astype(str)
         df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
@@ -98,7 +86,7 @@ def load_data():
         st.error(f"Error al cargar la base de datos: {e}")
         return pd.DataFrame(columns=['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad'])
 
-# Inicializar los datos en la sesión de Streamlit
+# Inicializar o forzar la carga de la agenda
 if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
 
@@ -106,7 +94,16 @@ if 'agenda' not in st.session_state:
 # 3. DISEÑO DE LA INTERFAZ DE USUARIO
 # ==========================================
 st.title("🗺️ Agenda Territorial Ejecutiva - UPEU")
-st.write("Herramienta colaborativa para la carga, modificación y visualización en tiempo real de actividades.")
+
+# Botón de rescate: limpia la caché si algo se congela
+col_head1, col_head2 = st.columns([4, 1])
+with col_head1:
+    st.write("Herramienta colaborativa para la carga, modificación y visualización en tiempo real de actividades.")
+with col_head2:
+    if st.button("🔄 Sincronizar Excel"):
+        st.session_state.agenda = load_data()
+        st.success("¡Base de datos sincronizada!")
+        st.rerun()
 
 # Pestañas de navegación
 tab1, tab2, tab3, tab4 = st.tabs([
@@ -125,9 +122,9 @@ with tab1:
     
     events = []
     colores_prioridad = {
-        "ALTA": "#E74C3C",       # Rojo
-        "INTERMEDIA": "#F39C12", # Naranja
-        "BAJA": "#2ECC71"        # Verde
+        "ALTA": "#E74C3C",
+        "INTERMEDIA": "#F39C12",
+        "BAJA": "#2ECC71"
     }
     
     for idx, row in st.session_state.agenda.iterrows():
@@ -220,7 +217,7 @@ with tab2:
                     "Fecha": str(f_fecha),
                     "Semana": int(f_fecha.isocalendar()[1]),
                     "Actividad": f_actividad,
-                    "Localidad": f_localidad,
+                    "Localidad": f_localidad.strip(),
                     "Organismo/Actor": f_organismo,
                     "Descripción": f_descripcion,
                     "Estado": f_estado,
@@ -244,7 +241,6 @@ with tab3:
     if len(df_agenda) > 0:
         st.write("Selecciona una actividad de la lista para corregir sus datos o darla de baja:")
         
-        # Generar identificadores para el selector
         opciones_actividades = []
         for idx, row in df_agenda.iterrows():
             opciones_actividades.append(f"{idx} | [{row['Localidad']}] {row['Actividad']} ({row['Fecha']})")
@@ -256,3 +252,109 @@ with tab3:
             registro_actual = df_agenda.loc[idx_seleccionado]
             
             st.info(f"Modificando el registro de la fila {idx_seleccionado}")
+            
+            with st.form("form_edicion"):
+                col1_ed, col2_ed = st.columns(2)
+                
+                with col1_ed:
+                    try:
+                        fecha_previa = datetime.strptime(limpiar_fecha_para_calendario(registro_actual['Fecha']), "%Y-%m-%d").date()
+                    except:
+                        fecha_previa = datetime.today().date()
+                        
+                    ed_fecha = st.date_input("Fecha", value=fecha_previa)
+                    ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
+                    ed_localidad = st.text_input("Localidad", value=str(registro_actual['Localidad']))
+                    ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
+                    
+                with col2_ed:
+                    opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
+                    def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
+                    
+                    opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
+                    def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
+                    
+                    ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
+                    ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
+                    ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
+                    ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
+                
+                col_btn1, col_btn2 = st.columns(2)
+                with col_btn1:
+                    boton_actualizar = st.form_submit_button("🔄 Actualizar Cambios")
+                with col_btn2:
+                    boton_eliminar = st.form_submit_button("❌ Eliminar Actividad permanentemente")
+                    
+                if boton_actualizar:
+                    st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = str(ed_fecha)
+                    st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
+                    st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
+                    st.session_state.agenda.at[idx_seleccionado, 'Localidad'] = ed_localidad.strip()
+                    st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
+                    st.session_state.agenda.at[idx_seleccionado, 'Descripción'] = ed_descripcion
+                    st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
+                    st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
+                    st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
+                    
+                    st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
+                    st.success("¡Actividad actualizada con éxito!")
+                    st.rerun()
+                    
+                if boton_eliminar:
+                    st.session_state.agenda = st.session_state.agenda.drop(idx_seleccionado).reset_index(drop=True)
+                    st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
+                    st.warning("La actividad ha sido eliminada del sistema.")
+                    st.rerun()
+    else:
+        st.warning("No hay actividades registradas en la base de datos para editar.")
+
+# ------------------------------------------
+# TAB 4: TABLA DE DATOS, BUSCADOR Y EXPORTACIÓN
+# ------------------------------------------
+with tab4:
+    st.header("Buscador y Reportes")
+    
+    # Leemos la base directa para asegurar que no muestre una vista desactualizada
+    df_filtrado = st.session_state.agenda.copy()
+    
+    if len(df_filtrado) > 0:
+        col_f1, col_f2 = st.columns(2)
+        with col_f1:
+            search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
+        with col_f2:
+            # Quitamos duplicados y ordenamos localidades limpias
+            localidades_unicas = sorted(list(df_filtrado['Localidad'].astype(str).str.strip().unique()))
+            list_localidades = ["Todas"] + [loc for loc in localidades_unicas if loc != 'nan' and loc != '']
+            filtro_localidad = st.selectbox("Filtrar por Localidad", list_localidades, key="filter_loc_tab4")
+            
+        # Filtrar localidad
+        if filtro_localidad != "Todas":
+            df_filtrado = df_filtrado[df_filtrado['Localidad'].str.strip() == filtro_localidad]
+            
+        # Filtrar palabra clave
+        if search_query:
+            df_filtrado = df_filtrado[
+                df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Descripción'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query)
+            ]
+            
+        # Renderizado de la tabla
+        st.dataframe(df_filtrado, use_container_width=True)
+        
+        # Exportador a Excel seguro
+        import io
+        output = io.BytesIO()
+        with pd.ExcelWriter(output, engine='openpyxl') as writer:
+            df_filtrado.to_excel(writer, index=False, sheet_name='Agenda')
+        excel_bytes = output.getvalue()
+        
+        st.download_button(
+            label="📥 Descargar datos filtrados a Excel",
+            data=excel_bytes,
+            file_name="agenda_territorial_filtrada.xlsx",
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            key="btn_download_tab4"
+        )
+    else:
+        st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
