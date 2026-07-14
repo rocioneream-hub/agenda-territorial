@@ -285,4 +285,3 @@ with tab3:
                 st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
                 st.session_state.agenda.at[idx_seleccionado, 'Descripción'] = ed_descripcion
                 st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
-                st.session_state.
