@@ -155,7 +155,6 @@ tab1, tab2, tab3, tab4 = st.tabs([
     "✏️ Modificar / Eliminar Actividad",
     "📊 Base de Datos Completa"
 ])
-
 # ------------------------------------------
 # TAB 1: CALENDARIO INTERACTIVO
 # ------------------------------------------
@@ -164,21 +163,41 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
+    
+    # Paleta de colores estándar por prioridad
     colores_prioridad = {
-        "ALTA": "#E74C3C",
-        "INTERMEDIA": "#F39C12",
-        "BAJA": "#2ECC71"
+        "ALTA": "#E74C3C",       # Rojo
+        "INTERMEDIA": "#F39C12", # Naranja
+        "BAJA": "#2ECC71"        # Verde
     }
+    
+    # Color especial para destacar eventos con Invitación Especial
+    COLOR_CON_INVITACION = "#8E44AD" # Violeta/Púrpura llamativo
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
         
         if fecha_limpia:
+            # Detectamos si tiene cargado algo en el campo de invitación
+            invitacion_val = str(row.get('Invitación a participar ', '')).strip()
+            tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
+            
+            # Si tiene invitación, le asignamos el color especial. Si no, su color por prioridad.
+            if tiene_invitacion:
+                color_evento = COLOR_CON_INVITACION
+            else:
+                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#34495E") # Gris oscuro por defecto
+            
+            # Modificamos el título para que también tenga un indicador visual rápido (un sobre ✉️)
+            titulo_mostrar = f"[{row['Localidad']}] {row['Actividad']}"
+            if tiene_invitacion:
+                titulo_mostrar = f"✉️ {titulo_mostrar}"
+                
             events.append({
-                "title": f"[{row['Localidad']}] {row['Actividad']}",
+                "title": titulo_mostrar,
                 "start": fecha_limpia,
                 "end": fecha_limpia,
-                "color": colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#34495E"),
+                "color": color_evento,
                 "extendedProps": {
                     "fecha_original": str(row['Fecha']),
                     "organismo": str(row['Organismo/Actor']),
@@ -186,50 +205,9 @@ with tab1:
                     "estado": str(row['Estado']),
                     "publico": str(row['Público Destinatario']),
                     "prioridad": str(row['Prioridad']),
-                    "invitacion": str(row['Invitación a participar '])
+                    "invitacion": invitacion_val if tiene_invitacion else "Sin invitaciones especiales"
                 }
             })
-
-    calendar_options = {
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,timeGridWeek,listMonth"
-        },
-        "initialView": "dayGridMonth",
-        "locale": "es",
-        "buttonText": {
-            "today": "Hoy",
-            "month": "Mes",
-            "week": "Semana",
-            "list": "Lista"
-        }
-    }
-    
-    if len(events) > 0:
-        state = calendar(events=events, options=calendar_options, key="calendar_agenda")
-        
-        if state.get("eventClick"):
-            clicked = state["eventClick"]["event"]
-            props = clicked.get("extendedProps", {})
-            
-            st.markdown("---")
-            st.subheader("🔍 Detalle de la Actividad Seleccionada")
-            
-            col_det1, col_det2 = st.columns(2)
-            with col_det1:
-                st.markdown(f"**📌 Actividad:** {clicked['title']}")
-                st.markdown(f"**📅 Fecha original:** `{props.get('fecha_original')}`")
-                st.markdown(f"**🏢 Organismo/Actor:** {props.get('organismo')}")
-                st.markdown(f"**🎯 Público Destinatario:** {props.get('publico')}")
-            with col_det2:
-                st.markdown(f"**🚨 Prioridad:** `{props.get('prioridad')}`")
-                st.markdown(f"**⚙️ Estado:** `{props.get('estado')}`")
-                st.markdown(f"**✉️ Invitación a participar:** `{props.get('invitacion')}`")
-                st.markdown(f"**📝 Descripción:** {props.get('descripcion')}")
-    else:
-        st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
-
 # ------------------------------------------
 # TAB 2: FORMULARIO DE CARGA DE DATOS (NUEVA ACTIVIDAD)
 # ------------------------------------------
