@@ -3,6 +3,7 @@ import pandas as pd
 from streamlit_calendar import calendar
 from datetime import datetime
 import re
+import os
 
 # ==========================================
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
@@ -43,6 +44,7 @@ st.markdown("""
         color: #000000 !important; 
         font-weight: 800 !important;
         font-size: 2.2rem !important;
+        margin-bottom: 0px !important;
     }
     
     /* Subtítulos en el Azul RN oficial (#007BE0) */
@@ -74,8 +76,9 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Nombre del archivo Excel que actúa como base de datos
+# Nombre del archivo Excel que actúa como base de datos y logo personalizado
 EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
+LOGO_FILE = "logo_UPEU.png"
 
 # ==========================================
 # 2. CONTROL DE ACCESO (MODO LECTOR / EDITOR)
@@ -132,7 +135,7 @@ def load_data():
     try:
         df = pd.read_excel(EXCEL_FILE)
         
-        # Normalizar los nombres de las columnas para quitar espacios accidentales (ej: 'Invitación a participar ')
+        # Normalizar los nombres de las columnas para quitar espacios accidentales
         df.columns = df.columns.str.strip()
         
         # --- ELIMINACIÓN DE FILAS FANTASMA ---
@@ -177,23 +180,31 @@ if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
 
 # ==========================================
-# 4. DISEÑO DE LA INTERFAZ DE USUARIO
+# 4. DISEÑO DE LA INTERFAZ DE USUARIO (CON CABECERA Y LOGO)
 # ==========================================
-col_title_left, col_title_right = st.columns([3, 1])
+col_logo, col_title_left, col_title_right = st.columns([1, 4, 1.5])
+
+with col_logo:
+    # Cargar logo de UPEU si existe en el repositorio con la medida perfecta recomendada
+    if os.path.exists(LOGO_FILE):
+        st.image(LOGO_FILE, width=220)
+    else:
+        # Cuadro gris de respaldo
+        st.info("Logotipo UPEU")
 
 with col_title_left:
-    st.title("📈 Agenda de Planificación Territorial")
+    st.title("Agenda de Planificación Territorial")
     st.markdown("**Unidad Provincial de Enlace con Universidades (UPEU)** | Gobierno de Río Negro")
-    st.markdown("<span class='hashtag-gestion'>#orgulloríonegro</span>", unsafe_allow_html=True) # Hashtag Oficial
+    st.markdown("<span class='hashtag-gestion'>#orgulloríonegro</span>", unsafe_allow_html=True) 
+
 with col_title_right:
-    st.write("")
     st.write("")
     if st.button("🔄 Sincronizar Excel", use_container_width=True):
         st.session_state.agenda = load_data()
         st.success("¡Base de datos sincronizada!")
         st.rerun()
 
-# Definición dinámica de pestañas dependiendo del rol del usuario (Editor vs Lector)
+# Definición dinámica de pestañas dependiendo de si el usuario ingresó la contraseña
 if es_editor:
     tab1, tab2, tab3, tab4 = st.tabs([
         "🗓️ Vista de Calendario", 
@@ -216,14 +227,14 @@ with tab1:
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
-    # Paleta de colores oficial por Prioridad
+    # Paleta de colores oficial por Prioridad (Verde oficial en prioridad Baja)
     colores_prioridad = {
         "ALTA": "#E74C3C",       # Rojo
         "INTERMEDIA": "#F39C12", # Naranja
         "BAJA": "#6AC64F"        # Verde RN Oficial
     }
     
-    # Color especial Azul RN para destacar eventos con Invitación formal a participar
+    # Color especial Azul RN oficial para destacar eventos con Invitación formal a participar
     COLOR_CON_INVITACION = "#007BE0" 
     
     for idx, row in st.session_state.agenda.iterrows():
@@ -234,7 +245,7 @@ with tab1:
             invitacion_val = str(row.get('Invitación a participar', '')).strip()
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
-            # Si tiene invitación, le asignamos el color azul RN. Si no, su color de prioridad.
+            # Si tiene invitación, asignamos el azul RN y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
                 titulo_mostrar = f"✉️ [{row['Localidad']}] {row['Actividad']}"
