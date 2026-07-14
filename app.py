@@ -144,6 +144,11 @@ st.markdown("""
         font-weight: 700 !important;
         text-decoration: none !important;
     }
+
+    /* 6. Bloqueo total de bordes o indicadores rojos nativos de eventos activos */
+    .fc-event, .fc-event-dot {
+        border-color: transparent !important;
+    }
     
     </style>
 """, unsafe_allow_html=True)
@@ -303,14 +308,14 @@ with tab1:
     
     events = []
     
-    # PALETA DE COLORES ADAPTADA A LA IDENTIDAD VISUAL DE RÍO NEGRO:
+    # 📌 PALETA DE COLORES ADAPTADA - CERO ROJO:
     colores_prioridad = {
-        "ALTA": "#007BE0",       # Azul RN (Asociado a los lagos y recursos acuíferos)
-        "INTERMEDIA": "#333333", # Gris Carbón (Representa la franja de la bandera/nombre)
-        "BAJA": "#6AC64F"        # Verde RN (Simboliza la esperanza y riqueza de la tierra)
+        "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)[cite: 1]
+        "INTERMEDIA": "#333333", # Gris Carbón (Representa la seriedad y formalidad)
+        "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)[cite: 1]
     }
     
-    # Color especial Azul RN oficial para destacar eventos con Invitación formal a participar
+    # Color especial púrpura para destacar eventos con Invitación formal a participar
     COLOR_CON_INVITACION = "#8E44AD" 
     
     for idx, row in st.session_state.agenda.iterrows():
