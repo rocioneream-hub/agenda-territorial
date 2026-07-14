@@ -61,15 +61,29 @@ def limpiar_fecha_para_calendario(val):
     return None
 
 def load_data():
-    """Carga el Excel y asegura que no haya valores nulos que rompan la interfaz."""
+    """Carga el Excel, elimina las filas vacías 'fantasmas' y limpia nulos."""
     try:
         df = pd.read_excel(EXCEL_FILE)
-        # Aseguramos que existan todas las columnas
+        
+        # --- ELIMINACIÓN DE FILAS FANTASMA ---
+        # Si la fila tiene celdas vacías o solo espacios en 'Fecha' y 'Actividad', la descartamos
+        df['_temp_fecha'] = df['Fecha'].astype(str).str.strip().replace('', None)
+        df['_temp_actividad'] = df['Actividad'].astype(str).str.strip().replace('', None)
+        
+        df = df[
+            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan')) |
+            (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan'))
+        ]
+        df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
+        # -------------------------------------
+
+        # Aseguramos que existan todas las columnas requeridas
         columnas_requeridas = ['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad']
         for col in columnas_requeridas:
             if col not in df.columns:
                 df[col] = ""
-        # Reemplazar nulos por textos legibles
+                
+        # Reemplazar valores nulos reales por textos limpios para evitar que se rompa la vista
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
         df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str)
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
@@ -77,7 +91,9 @@ def load_data():
         df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
         df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
         df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
-        return df
+        
+        return df.reset_index(drop=True)
+        
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         return pd.DataFrame(columns=['Fecha', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 'Descripción', 'Estado', 'Público Destinatario', 'Prioridad'])
@@ -92,7 +108,7 @@ if 'agenda' not in st.session_state:
 st.title("🗺️ Agenda Territorial Ejecutiva - UPEU")
 st.write("Herramienta colaborativa para la carga, modificación y visualización en tiempo real de actividades.")
 
-# Pestañas de navegación (Agregamos la pestaña para Modificar/Eliminar)
+# Pestañas de navegación
 tab1, tab2, tab3, tab4 = st.tabs([
     "🗓️ Vista de Calendario", 
     "✍️ Carga Rápida de Actividad", 
@@ -222,66 +238,23 @@ with tab2:
 # ------------------------------------------
 with tab3:
     st.header("Editar / Cancelar Actividades")
-    st.write("Selecciona una actividad de la lista para corregir sus datos o darla de baja:")
     
-    # Crear una lista amigable para que el usuario elija qué fila modificar
     df_agenda = st.session_state.agenda.copy()
     
-    # Generamos un identificador de texto para cada registro
-    opciones_actividades = []
-    for idx, row in df_agenda.iterrows():
-        opciones_actividades.append(f"{idx} | [{row['Localidad']}] {row['Actividad']} ({row['Fecha']})")
+    if len(df_agenda) > 0:
+        st.write("Selecciona una actividad de la lista para corregir sus datos o darla de baja:")
         
-    actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
-    
-    if actividad_seleccionada:
-        # Extraer el índice original
-        idx_seleccionado = int(actividad_seleccionada.split(" | ")[0])
-        registro_actual = df_agenda.loc[idx_seleccionado]
-        
-        st.info(f"Modificando el registro de la fila {idx_seleccionado}")
-        
-        # Formulario con los datos precargados del registro seleccionado
-        with st.form("form_edicion"):
-            col1_ed, col2_ed = st.columns(2)
+        # Generar identificadores para el selector
+        opciones_actividades = []
+        for idx, row in df_agenda.iterrows():
+            opciones_actividades.append(f"{idx} | [{row['Localidad']}] {row['Actividad']} ({row['Fecha']})")
             
-            with col1_ed:
-                # Intentamos parsear la fecha existente para que aparezca ya seleccionada
-                try:
-                    fecha_previa = datetime.strptime(limpiar_fecha_para_calendario(registro_actual['Fecha']), "%Y-%m-%d").date()
-                except:
-                    fecha_previa = datetime.today().date()
-                    
-                ed_fecha = st.date_input("Fecha", value=fecha_previa)
-                ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
-                ed_localidad = st.text_input("Localidad", value=str(registro_actual['Localidad']))
-                ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
-                
-            with col2_ed:
-                # Índices por defecto para las opciones de selectbox
-                opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
-                def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
-                
-                opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
-                def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
-                
-                ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
-                ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
-                ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
-                ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
+        actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
+        
+        if actividad_seleccionada:
+            idx_seleccionado = int(actividad_seleccionada.split(" | ")[0])
+            registro_actual = df_agenda.loc[idx_seleccionado]
             
-            col_btn1, col_btn2 = st.columns(2)
-            with col_btn1:
-                boton_actualizar = st.form_submit_button("🔄 Actualizar Cambios")
-            with col_btn2:
-                boton_eliminar = st.form_submit_button("❌ Eliminar Actividad permanentemente")
-                
-            if boton_actualizar:
-                # Modificamos los valores del DataFrame en la fila correspondiente
-                st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = str(ed_fecha)
-                st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
-                st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
-                st.session_state.agenda.at[idx_seleccionado, 'Localidad'] = ed_localidad
-                st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
-                st.session_state.agenda.at[idx_seleccionado, 'Descripción'] = ed_descripcion
-                st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
+            st.info(f"Modificando el registro de la fila {idx_seleccionado}")
+            
+            with
