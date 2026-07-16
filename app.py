@@ -271,7 +271,7 @@ def load_data():
                 df[col] = ""
                 
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
-        df['Hora'] = df['Hora'].fillna("").astype(str).str.strip()
+        df['Hora'] = df['Hora'].fillna("Sin especificar").astype(str).str.strip()
         df['Ciudad'] = df['Ciudad'].fillna("Sin Ciudad").astype(str).str.strip()
         df['Lugar'] = df['Lugar'].fillna("Sin especificar").astype(str).str.strip()
         df['Explicación breve de la actividad'] = df['Explicación breve de la actividad'].fillna("").astype(str)
@@ -455,14 +455,26 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
             ficha_table.rows[1].cells[0].text = "Ciudad:"
             ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
             
-            # Campo 3: Fecha
-            fecha_val = str(row.get('Fecha', 'Sin fecha'))
+            # Campo 3: Fecha (Manejo inteligente de "Sin especificar" / primer día de cada mes)
+            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
-            hora_val = str(row.get('Hora', '')).strip()
-            hora_text = f" - {hora_val} hs" if hora_val else ""
+            
+            # Si el Excel contiene la aclaración o la fecha apunta al primero de mes como "Sin especificar"
+            if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
+                fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
+            else:
+                fecha_mostrar = fecha_val
+                
+            hora_val = str(row.get('Hora', 'Sin especificar')).strip()
+            # Si la hora está vacía o es por defecto pero se guardó como sin especificar
+            if hora_val.lower() == "nan" or hora_val == "" or "sin especificar" in hora_val.lower():
+                hora_text = " - Sin especificar"
+            else:
+                hora_text = f" - {hora_val} hs"
+                
             ficha_table.rows[2].cells[0].text = "Fecha:"
-            ficha_table.rows[2].cells[1].text = f"{fecha_val}{hora_text}"
+            ficha_table.rows[2].cells[1].text = f"{fecha_mostrar}{hora_text}"
             
             # Campo 4: Lugar
             ficha_table.rows[3].cells[0].text = "Lugar:"
@@ -516,7 +528,7 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
     return buffer.getvalue()
 
 # ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP
+# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CORREGIDA Y CON NUEVO SEPARADOR)
 # ==========================================
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
@@ -539,12 +551,22 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         for idx, row in df_procesar.iterrows():
             act_titulo = str(row.get('Actividad', 'Sin Nombre')).upper().strip()
             
-            fecha_val = str(row.get('Fecha', 'Sin fecha'))
+            # Tratamiento inteligente de fecha flexible
+            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
                 
-            hora_val = str(row.get('Hora', '')).strip()
-            hora_txt = f" - {hora_val} hs" if hora_val and hora_val.lower() != 'nan' else ""
+            if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
+                fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
+            else:
+                fecha_mostrar = fecha_val
+                
+            # Tratamiento de hora flexible
+            hora_val = str(row.get('Hora', 'Sin especificar')).strip()
+            if hora_val.lower() == "nan" or hora_val == "" or "sin especificar" in hora_val.lower():
+                hora_txt = " - Horario sin especificar"
+            else:
+                hora_txt = f" - {hora_val} hs"
             
             ciudad_val = str(row.get('Ciudad', 'Sin especificar')).strip()
             lugar_val = str(row.get('Lugar', 'Sin especificar')).strip()
@@ -556,9 +578,10 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
             except:
                 asistencia_txt = "Sin especificar"
                 
+            # Renderizado de los 6 campos solicitados
             lines.append(f"📌 *Actividad {idx+1}:* {act_titulo}")
             lines.append(f"📍 *Ciudad:* {ciudad_val}")
-            lines.append(f"📅 *Fecha:* {fecha_val}{hora_txt}")
+            lines.append(f"📅 *Fecha:* {fecha_mostrar}{hora_txt}")
             lines.append(f"🏢 *Lugar:* {lugar_val}")
             
             if explicacion and explicacion.lower() != "nan" and explicacion != "":
@@ -568,8 +591,9 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
                 
             lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
             
+            # SEPARADOR DE WHATSAPP MEJORADO (Minimalista, limpio y no se corta en celulares)
             if idx < total_eventos - 1:
-                lines.append(" ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ")
+                lines.append("\n🔸  🔸  🔸  🔸  🔸\n")
                 
     lines.append("─────────────────────")
     
@@ -639,15 +663,20 @@ with tab1:
             tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
             
             hora_val = str(row.get('Hora', '')).strip()
-            tiene_hora = hora_val != "" and hora_val.lower() != "nan"
+            tiene_hora = hora_val != "" and hora_val.lower() != "nan" and "sin especificar" not in hora_val.lower()
             prefijo_hora = f"{hora_val} hs - " if tiene_hora else ""
             
+            # Manejo de etiqueta "Sin especificar" en calendario
+            act_txt = str(row['Actividad'])
+            if "sin especificar" in str(row['Fecha']).lower():
+                act_txt = f"📍 [FECHA FLEXIBLE] {act_txt}"
+                
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
-                titulo_mostrar = f"✉️ {prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {row['Actividad']}"
+                titulo_mostrar = f"✉️ {prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}"
             else:
                 color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
-                titulo_mostrar = f"{prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {row['Actividad']}"
+                titulo_mostrar = f"{prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}"
                 
             events.append({
                 "title": titulo_mostrar,
@@ -723,8 +752,18 @@ if es_editor and tab2 is not None:
             col1, col2 = st.columns(2)
             
             with col1:
-                f_fecha = st.date_input("Fecha programada", datetime.today())
-                f_hora = st.time_input("Hora del evento", value=time(9, 0)) 
+                # Opciones dinámicas de flexibilización de Fechas
+                st.markdown("**📅 Fecha del Evento**")
+                fecha_sin_especificar = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=False)
+                mes_propuesto = st.selectbox("Mes de referencia:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
+                anio_propuesto = st.selectbox("Año:", [2026, 2027])
+                f_fecha = st.date_input("Elegir fecha fija (Si la casilla anterior está desmarcada)", datetime.today())
+                
+                # Opciones dinámicas de flexibilización de Hora
+                st.markdown("**⏰ Horario del Evento**")
+                hora_sin_especificar = st.checkbox("Dejar hora sin especificar (A coordinar)", value=False)
+                f_hora = st.time_input("Hora fija (Si la casilla anterior está desmarcada)", value=time(9, 0)) 
+                
                 f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
                 f_ciudad = st.text_input("Ciudad", placeholder="Ej: General Roca")
                 f_lugar = st.text_input("Lugar / Espacio Físico", placeholder="Ej: Aula Magna UNRN")
@@ -744,12 +783,24 @@ if es_editor and tab2 is not None:
                 if not f_actividad or not f_ciudad:
                     st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
                 else:
-                    hora_formateada = f_hora.strftime("%H:%M")
+                    # Lógica de construcción para Fecha Flexible
+                    if fecha_sin_especificar:
+                        meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+                        mes_num = meses_dict[mes_propuesto]
+                        # Se coloca automáticamente como el primer día del mes seleccionado
+                        fecha_guardar = f"Sin especificar ({mes_propuesto} {anio_propuesto})"
+                        fecha_tecnica = date(anio_propuesto, mes_num, 1)
+                    else:
+                        fecha_guardar = str(f_fecha)
+                        fecha_tecnica = f_fecha
+                        
+                    # Lógica de construcción para Hora Flexible
+                    hora_guardar = "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M")
                     
                     nueva_actividad = {
-                        "Fecha": str(f_fecha),
-                        "Hora": hora_formateada,
-                        "Semana": int(f_fecha.isocalendar()[1]),
+                        "Fecha": fecha_guardar,
+                        "Hora": hora_guardar,
+                        "Semana": int(fecha_tecnica.isocalendar()[1]),
                         "Actividad": f_actividad,
                         "Ciudad": f_ciudad.strip(),
                         "Lugar": f_lugar.strip(),
@@ -795,12 +846,18 @@ if es_editor and tab3 is not None:
                     col1_ed, col2_ed = st.columns(2)
                     
                     with col1_ed:
+                        st.markdown("**📅 Fecha del Evento**")
+                        ed_fecha_sin = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=("sin especificar" in str(registro_actual['Fecha']).lower()))
+                        
                         try:
                             fecha_previa = datetime.strptime(limpiar_fecha_para_calendario(registro_actual['Fecha']), "%Y-%m-%d").date()
                         except:
                             fecha_previa = datetime.today().date()
                             
                         ed_fecha = st.date_input("Fecha", value=fecha_previa)
+                        
+                        st.markdown("**⏰ Horario del Evento**")
+                        ed_hora_sin = st.checkbox("Dejar hora sin especificar (A coordinar)", value=("sin especificar" in str(registro_actual.get('Hora', '')).lower()))
                         
                         hora_previa_str = str(registro_actual.get('Hora', '09:00')).strip()
                         try:
@@ -840,9 +897,16 @@ if es_editor and tab3 is not None:
                         boton_eliminar = st.form_submit_button("❌ Eliminar Actividad permanentemente")
                         
                     if boton_actualizar:
-                        st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = str(ed_fecha)
-                        st.session_state.agenda.at[idx_seleccionado, 'Hora'] = ed_hora.strftime("%H:%M")
-                        st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
+                        if ed_fecha_sin:
+                            fecha_guardar = "Sin especificar (A coordinar)"
+                            fecha_tecnica = date(date.today().year, date.today().month, 1)
+                        else:
+                            fecha_guardar = str(ed_fecha)
+                            fecha_tecnica = ed_fecha
+                            
+                        st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = fecha_guardar
+                        st.session_state.agenda.at[idx_seleccionado, 'Hora'] = "Sin especificar" if ed_hora_sin else ed_hora.strftime("%H:%M")
+                        st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(fecha_tecnica.isocalendar()[1])
                         st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
                         st.session_state.agenda.at[idx_seleccionado, 'Ciudad'] = ed_ciudad.strip()
                         st.session_state.agenda.at[idx_seleccionado, 'Lugar'] = ed_lugar.strip()
@@ -905,7 +969,6 @@ with tab4:
         # ==========================================
         st.markdown("### 📤 Generar y Exportar Documentos")
         
-        # Obtener lista única de semanas disponibles en el Excel para el filtro semanal
         try:
             semanas_disponibles = sorted([int(s) for s in df_filtrado['Semana'].dropna().unique() if str(s).strip() != "" and str(s).lower() != "nan"])
         except:
@@ -915,19 +978,17 @@ with tab4:
         
         with col_config:
             rango_reporte = st.radio(
-                "Alcance temporal de la descarga y mensajes:",
+                "Alcance temporal de la descarga:",
                 ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica"],
                 help="Determina si los archivos descargados y mensajes serán globales, cronograma de hoy en adelante, o de una semana en particular.",
                 horizontal=False
             )
-            # NUEVO FILTRO: Checkbox dinámico de Invitaciones
             solo_con_invitacion = st.checkbox(
                 "🔍 Filtrar SOLO actividades con 'Invitación a participar'", 
                 value=False,
                 help="Si lo activas, el Word, Excel y WhatsApp solo contendrán actividades que requieran gestión de invitaciones o protocolo."
             )
             
-        # Elementos dinámicos basados en la selección del radio button
         df_descarga = df_filtrado.copy()
         titulo_word = "REPORTE PLANIFICACION TERRITORIAL"
         titulo_whatsapp = "Cronograma de actividades"
@@ -970,33 +1031,29 @@ with tab4:
                 else:
                     st.warning("No hay números de semana registrados en el Excel.")
                     
-        # Aplicación del filtro estricto de Invitaciones si el usuario lo marca
+        # Aplicación del filtro estricto de Invitaciones
         if solo_con_invitacion:
-            # Filtramos nulos, celdas vacías o strings que solo tengan espacios
             df_descarga = df_descarga[
                 df_descarga['Invitación a participar'].notna() & 
                 (df_descarga['Invitación a participar'].astype(str).str.strip() != "") & 
                 (df_descarga['Invitación a participar'].astype(str).str.strip().str.lower() != "nan")
             ]
-            # Ajustamos levemente el título para reflejar el filtro en el reporte de Word
-            titulo_word += " - PROTOCOLO E INVITACIONES"
-            titulo_whatsapp += " (Con Invitaciones)"
-            rango_aclaracion_word += " | Filtrado por Protocolo/Invitaciones"
+            titulo_word += " - PROTOCOLO"
+            titulo_whatsapp += " (Protocolo)"
+            rango_aclaracion_word += " | Filtrado por Protocolo"
             
         with col_down1:
             st.write("") 
             st.write("")
-            # Generación dinámica del Excel
             output_excel = io.BytesIO()
             with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
                 df_descarga.to_excel(writer, index=False, sheet_name='Agenda')
             excel_bytes = output_excel.getvalue()
             
-            nombre_excel = "agenda_filtrada_territorial.xlsx"
             st.download_button(
                 label="📥 Descargar Excel",
                 data=excel_bytes,
-                file_name=nombre_excel,
+                file_name="agenda_filtrada_territorial.xlsx",
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="btn_download_excel",
                 use_container_width=True
@@ -1005,7 +1062,6 @@ with tab4:
         with col_down2:
             st.write("") 
             st.write("")
-            # Generación dinámica del Reporte Word
             if LIBRERIA_DOCX_LISTA:
                 try:
                     word_bytes = crear_reporte_word_areas(
@@ -1013,11 +1069,10 @@ with tab4:
                         titulo_personalizado=titulo_word, 
                         aclaracion_rango=rango_aclaracion_word
                     )
-                    nombre_word = "Reporte_Planificacion_Territorial.docx"
                     st.download_button(
                         label="📝 Descargar Reporte Word",
                         data=word_bytes,
-                        file_name=nombre_word,
+                        file_name="Reporte_Planificacion_Territorial.docx",
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="btn_download_word",
                         use_container_width=True
@@ -1034,7 +1089,6 @@ with tab4:
         st.markdown("### 💬 Copiar Reporte para WhatsApp")
         st.write("Copiá y pegá el siguiente mensaje estructurado con los campos oficiales requeridos:")
         
-        # Generar el mensaje dinámico de WhatsApp basado estrictamente en el filtro y cabecera elegida
         mensaje_whatsapp_generado = generar_mensaje_whatsapp(df_descarga, titulo_cabecera=titulo_whatsapp)
         
         st.code(mensaje_whatsapp_generado, language="text")
