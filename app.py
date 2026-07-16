@@ -186,7 +186,7 @@ st.markdown("""
         border-color: transparent !important;
     }
 
-    /* Día de hoy (celeste muy sutil y número azul) */
+    /* Día de hoy (celeste sutil y número azul) */
     .fc .fc-daygrid-day.fc-day-today {
         background-color: rgba(0, 123, 224, 0.08) !important;
     }
@@ -558,10 +558,10 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
     return buffer.getvalue()
 
 # ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP
+# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CORREGIDA E INTEGRADA)
 # ==========================================
 def generar_mensaje_whatsapp(df, es_futuro=False):
-    """Genera una cadena de texto optimizada con emojis y formato de negrita para WhatsApp (*texto*)."""
+    """Genera una cadena de texto para WhatsApp adaptada estrictamente a los 6 campos del reporte de Word."""
     hoy_date = date.today()
     df_procesar = df.copy()
     
@@ -575,19 +575,22 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
     lines = []
     lines.append("🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*")
     
+    # Cabecera exacta según el filtro dinámico
     if es_futuro:
-        lines.append(f"📅 _Agenda de actividades futuras desde hoy ({hoy_date.strftime('%d/%m/%Y')}) en adelante:_")
+        lines.append(f"📅 *Agenda de actividades futuras* (Desde hoy {hoy_date.strftime('%d/%m/%Y')}):")
     else:
-        lines.append("📅 _Historial y Agenda Completa de Actividades:_")
+        lines.append("📅 *Agenda completa de actividades*:")
         
     lines.append("─────────────────────")
     
     total_eventos = len(df_procesar)
     if total_eventos == 0:
-        lines.append("*(Sin actividades planificadas para el filtro seleccionado)*")
+        lines.append("*(Sin actividades planificadas para el rango seleccionado)*")
     else:
         for idx, row in df_procesar.iterrows():
             act_titulo = str(row.get('Actividad', 'Sin Nombre')).upper().strip()
+            
+            # Tratamiento y limpieza de fecha/hora
             fecha_val = str(row.get('Fecha', 'Sin fecha'))
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
@@ -597,27 +600,33 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
             
             ciudad_val = str(row.get('Ciudad', 'Sin especificar')).strip()
             lugar_val = str(row.get('Lugar', 'Sin especificar')).strip()
-            explicacion = str(row.get('Explicación breve de la actividad', '')).strip()
+            explicacion = str(row.get('Explicación breve de la actividad', row.get('Descripción', ''))).strip()
             
             try:
                 asistencia = int(row.get('Cantidad de personas estimadas', 0))
-                asistencia_txt = f"{asistencia:,} personas aprox." if asistencia > 0 else "A confirmar"
+                asistencia_txt = f"{asistencia:,} personas estimadas" if asistencia > 0 else "Sin especificar"
             except:
-                asistencia_txt = "A confirmar"
+                asistencia_txt = "Sin especificar"
                 
-            lines.append(f"📌 *Actividad {idx+1}: {act_titulo}*")
+            # Renderizado de los 6 campos solicitados (con emojis correspondientes)
+            lines.append(f"📌 *Actividad {idx+1}:* {act_titulo}")
+            lines.append(f"📍 *Ciudad:* {ciudad_val}")
             lines.append(f"📅 *Fecha:* {fecha_val}{hora_txt}")
-            lines.append(f"📍 *Lugar:* {ciudad_val} ({lugar_val})")
-            if explicacion and explicacion.lower() != "nan":
-                lines.append(f"📝 *Detalle:* {explicacion}")
-            lines.append(f"👥 *Asistencia:* {asistencia_txt}")
+            lines.append(f"🏢 *Lugar:* {lugar_val}")
             
-            # Línea divisoria sutil entre actividades, excepto en el último evento
+            # Limpieza para que no imprima "nan" literal si el campo está vacío en el Excel
+            if explicacion and explicacion.lower() != "nan" and explicacion != "":
+                lines.append(f"📝 *Explicación breve:* {explicacion}")
+            else:
+                lines.append("📝 *Explicación breve:* Sin notas adicionales")
+                
+            lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
+            
+            # Divisoria visual entre fichas
             if idx < total_eventos - 1:
                 lines.append(" ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ")
                 
     lines.append("─────────────────────")
-    lines.append("*#gobiernodelosrionegrinos*")
     
     return "\n".join(lines)
 
@@ -962,9 +971,9 @@ with tab4:
         with col_config:
             # Selector dinámico del alcance temporal de los archivos a descargar
             rango_reporte = st.radio(
-                "Alcance temporal de la descarga:",
+                "Alcance temporal de la descarga y mensajes:",
                 ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante"],
-                help="Determina si los archivos descargados incluirán todo el historial o solo las acciones a futuro.",
+                help="Determina si los archivos y el mensaje de WhatsApp incluirán todo el historial o solo las acciones a futuro.",
                 horizontal=False
             )
             solo_futuras = (rango_reporte == "Desde Hoy hacia adelante")
@@ -1024,16 +1033,16 @@ with tab4:
                 st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes.")
                 
         # ==========================================
-        # NUEVA SECCIÓN: REPORTE INTEGRADO PARA WHATSAPP
+        # SECCIÓN DE REPORTE FORMATEADO PARA WHATSAPP (ACTUALIZADO)
         # ==========================================
         st.markdown("---")
         st.markdown("### 💬 Copiar Reporte para WhatsApp")
-        st.write("Este cuadro genera el texto formateado de forma limpia con emojis listo para copiar y pegar directo en chats o grupos:")
+        st.write("Copiá y pegá el siguiente mensaje estructurado con los campos oficiales requeridos:")
         
-        # Generar el mensaje basado estrictamente en el filtro y alcance elegidos
+        # Generar el mensaje basado estrictamente en el filtro, campos elegidos y alcance
         mensaje_whatsapp_generado = generar_mensaje_whatsapp(df_descarga, es_futuro=solo_futuras)
         
-        # Mostramos el bloque de texto con el botón nativo de Streamlit "Copy" en la esquina derecha del componente
+        # Mostramos el bloque de texto con el botón nativo de Streamlit "Copy"
         st.code(mensaje_whatsapp_generado, language="text")
         
     else:
