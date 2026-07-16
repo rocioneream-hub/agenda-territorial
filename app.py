@@ -4,6 +4,17 @@ from streamlit_calendar import calendar
 from datetime import datetime, time
 import re
 import os
+import io
+
+# Importación segura de la librería para generar documentos de Word
+try:
+    import docx
+    from docx.shared import Pt, Inches
+    from docx.enum.text import WD_ALIGN_PARAGRAPH
+    from docx.oxml import OxmlElement, parse_xml
+    from docx.oxml.ns import nsdecls, qn
+except ImportError:
+    pass
 
 # ==========================================
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
@@ -199,7 +210,7 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-# Nombre del archivo Excel que actúa como base de datos e ISOLOGO EN FORMATO VECTORIAL SVG
+# Nombre del archivo Excel de base de datos e ISOLOGO vectorial
 EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
 LOGO_FILE = "isologo_RN.svg"
 
@@ -271,10 +282,11 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        # Asegurar que existan todas las columnas requeridas
+        # Asegurar que existan todas las columnas requeridas (Adaptadas al nuevo reporte)
         columnas_requeridas = [
-            'Fecha', 'Hora', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
-            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
+            'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
+            'Explicación breve de la actividad', 'Cantidad de personas estimadas',
+            'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ]
         for col in columnas_requeridas:
             if col not in df.columns:
@@ -282,9 +294,14 @@ def load_data():
                 
         df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
         df['Hora'] = df['Hora'].fillna("").astype(str).str.strip()
-        df['Localidad'] = df['Localidad'].fillna("Sin Localidad").astype(str).str.strip()
+        df['Ciudad'] = df['Ciudad'].fillna("Sin Ciudad").astype(str).str.strip()
+        df['Lugar'] = df['Lugar'].fillna("Sin especificar").astype(str).str.strip()
+        df['Explicación breve de la actividad'] = df['Explicación breve de la actividad'].fillna("").astype(str)
+        
+        # Validación de asistencia estimada
+        df['Cantidad de personas estimadas'] = pd.to_numeric(df['Cantidad de personas estimadas'], errors='coerce').fillna(0).astype(int)
+        
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
-        df['Descripción'] = df['Descripción'].fillna("").astype(str)
         df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
         df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
         df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
@@ -295,13 +312,195 @@ def load_data():
     except Exception as e:
         st.error(f"Error al cargar la base de datos: {e}")
         return pd.DataFrame(columns=[
-            'Fecha', 'Hora', 'Semana', 'Actividad', 'Localidad', 'Organismo/Actor', 
-            'Descripción', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
+            'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
+            'Explicación breve de la actividad', 'Cantidad de personas estimadas',
+            'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
         ])
 
 # Inicializar o forzar la carga de la agenda
 if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
+
+# ==========================================
+# FUNCIONES AUXILIARES DE EXPORTACIÓN A WORD (ESTRUCTURA DE REPORTE FORMAL)
+# ==========================================
+
+def set_cell_background(cell, color_hex):
+    """Establece de manera segura el color de fondo de una celda en una tabla de Word."""
+    shading_xml = f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
+    cell._tc.get_or_add_tcPr().append(parse_xml(shading_xml))
+
+def crear_reporte_word_areas(df):
+    """Genera un reporte DOCX formal optimizado para compartir con otras áreas de gobierno."""
+    doc = docx.Document()
+    
+    # Configuración de márgenes estándar de oficina
+    for section in doc.sections:
+        section.top_margin = Inches(1)
+        section.bottom_margin = Inches(1)
+        section.left_margin = Inches(1)
+        section.right_margin = Inches(1)
+        
+    style = doc.styles['Normal']
+    font = style.font
+    font.name = 'Calibri'
+    font.size = Pt(11)
+    
+    # 1. MEMBRETADO INSTITUCIONAL
+    p_header = doc.add_paragraph()
+    p_header.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n")
+    run_gob.font.bold = True
+    run_gob.font.size = Pt(10)
+    run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN (#6AC64F)
+    
+    run_sub = p_header.add_run("Ministerio de Educación y Derechos Humanos\nUnidad Provincial de Enlace con Universidades (UPEU)\n")
+    run_sub.font.size = Pt(9.5)
+    run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
+    
+    # Línea divisoria decorativa
+    p_line = doc.add_paragraph()
+    p_line.paragraph_format.space_before = Pt(0)
+    p_line.paragraph_format.space_after = Pt(20)
+    p_line_border = OxmlElement('w:pBdr')
+    bottom_border = OxmlElement('w:bottom')
+    bottom_border.set(qn('w:val'), 'single')
+    bottom_border.set(qn('w:sz'), '8')
+    bottom_border.set(qn('w:space'), '1')
+    bottom_border.set(qn('w:color'), '007BE0') # Azul RN (#007BE0)
+    p_line_border.append(bottom_border)
+    p_line._p.get_or_add_pPr().append(p_line_border)
+    
+    # 2. TÍTULOS PRINCIPALES
+    p_title = doc.add_paragraph()
+    p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run_title = p_title.add_run("REPORTE EJECUTIVO DE ACTIVIDADES TERRITORIALES")
+    run_title.font.bold = True
+    run_title.font.size = Pt(16)
+    run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224) # Azul RN
+    p_title.paragraph_format.space_after = Pt(2)
+    
+    p_date = doc.add_paragraph()
+    p_date.alignment = WD_ALIGN_PARAGRAPH.LEFT
+    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | Documento de Coordinación Interinstitucional")
+    run_date.font.italic = True
+    run_date.font.size = Pt(9.5)
+    p_date.paragraph_format.space_after = Pt(24)
+    
+    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL
+    total_acciones = len(df)
+    total_personas = df['Cantidad de personas estimadas'].sum()
+    
+    table_resumen = doc.add_table(rows=1, cols=2)
+    table_resumen.autofit = True
+    
+    hdr_res = table_resumen.rows[0].cells
+    hdr_res[0].text = "Total de Acciones Planificadas"
+    hdr_res[1].text = "Asistencia Estimada Global"
+    
+    for cell in hdr_res:
+        set_cell_background(cell, "F5F5F5")
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.runs[0].font.bold = True
+        p.runs[0].font.size = Pt(10)
+        p.runs[0].font.color.rgb = docx.shared.RGBColor(51, 51, 51)
+        
+    row_res = table_resumen.add_row().cells
+    row_res[0].text = str(total_acciones)
+    row_res[1].text = f"{total_personas:,} personas"
+    
+    for cell in row_res:
+        p = cell.paragraphs[0]
+        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        p.runs[0].font.bold = True
+        p.runs[0].font.size = Pt(12)
+        p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+        
+    doc.add_paragraph().paragraph_format.space_after = Pt(12)
+    
+    # 4. DESGLOSE DE LAS ACTIVIDADES (Formato ficha ordenada por hojas/parrafos)
+    doc.add_heading("Fichas de Planificación de Actividades", level=2)
+    doc.add_paragraph("A continuación se detallan las acciones territoriales ordenadas cronológicamente para la articulación entre las diversas áreas de la provincia:")
+    
+    if total_acciones > 0:
+        # Ordenamos las actividades por fecha para un reporte estructurado
+        df_ordenado = df.sort_values(by='Fecha').reset_index(drop=True)
+        
+        for idx, row in df_ordenado.iterrows():
+            p_act = doc.add_paragraph()
+            p_act.paragraph_format.space_before = Pt(14)
+            p_act.paragraph_format.space_after = Pt(4)
+            
+            # Encabezado del Evento
+            num_hora = f" - {row['Hora']} hs" if str(row['Hora']).strip() != "" else ""
+            run_header = p_act.add_run(f"📌 Actividad {idx+1}: {row['Actividad']}")
+            run_header.font.bold = True
+            run_header.font.size = Pt(12)
+            run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+            
+            # Tabla de Ficha Técnica Individual para cada actividad (6 campos requeridos por el usuario)
+            ficha_table = doc.add_table(rows=5, cols=2)
+            ficha_table.style = 'Light Shading Accent 1'
+            ficha_table.autofit = False
+            ficha_table.columns[0].width = Inches(2.2) # Campo
+            ficha_table.columns[1].width = Inches(4.3) # Contenido
+            
+            # Configuración de Fila 1: Ciudad y Lugar
+            row_cells = ficha_table.rows[0].cells
+            row_cells[0].text = "Ciudad / Localidad:"
+            row_cells[1].text = str(row['Ciudad'])
+            
+            # Configuración de Fila 2: Fecha y Hora
+            row_cells = ficha_table.rows[1].cells
+            row_cells[0].text = "Fecha y Horario:"
+            row_cells[1].text = f"{row['Fecha']}{num_hora}"
+            
+            # Configuración de Fila 3: Lugar Específico
+            row_cells = ficha_table.rows[2].cells
+            row_cells[0].text = "Lugar / Espacio Físico:"
+            row_cells[1].text = str(row['Lugar'])
+            
+            # Configuración de Fila 4: Explicación Breve de la Acción
+            row_cells = ficha_table.rows[3].cells
+            row_cells[0].text = "Explicación breve de la actividad:"
+            row_cells[1].text = str(row['Explicación breve de la actividad'])
+            
+            # Configuración de Fila 5: Personas Estimadas
+            row_cells = ficha_table.rows[4].cells
+            row_cells[0].text = "Cantidad de personas estimadas:"
+            row_cells[1].text = f"{row['Cantidad de personas estimadas']:,} asistentes"
+            
+            # Estilos internos de las fichas individuales
+            for r_idx, r in enumerate(ficha_table.rows):
+                # Negrita para la columna de los conceptos
+                r.cells[0].paragraphs[0].runs[0].font.bold = True
+                r.cells[0].paragraphs[0].runs[0].font.size = Pt(9.5)
+                r.cells[1].paragraphs[0].runs[0].font.size = Pt(9.5)
+                # Resaltar la última fila de asistencia en Verde RN
+                if r_idx == 4:
+                    r.cells[1].paragraphs[0].runs[0].font.bold = True
+                    r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79)
+            
+            p_sep = doc.add_paragraph()
+            p_sep.paragraph_format.space_after = Pt(8)
+    else:
+        doc.add_paragraph("No se registran actividades programadas dentro de los criterios de búsqueda.")
+        
+    # 5. PIE DE PÁGINA INSTITUCIONAL
+    p_footer = doc.add_paragraph()
+    p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    p_footer.paragraph_format.space_before = Pt(35)
+    run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos")
+    run_hashtag.font.bold = True
+    run_hashtag.font.size = Pt(11)
+    run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
+    
+    # Guardar documento en buffer de memoria de forma ágil
+    buffer = io.BytesIO()
+    doc.save(buffer)
+    buffer.seek(0)
+    return buffer.getvalue()
 
 # ==========================================
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
@@ -355,11 +554,11 @@ with tab1:
     
     events = []
     
-    # 📌 PALETA DE COLORES ADAPTADA:
+    # PALETA DE COLORES ADAPTADA:
     colores_prioridad = {
-        "ALTA": "#007BE0",       # Azul RN Oficial (Asociado a los lagos y recursos acuíferos)
-        "INTERMEDIA": "#333333", # Gris Carbón (Representa seriedad y formalidad)
-        "BAJA": "#6AC64F"        # Verde RN Oficial (Simboliza el valle y la riqueza de la tierra)
+        "ALTA": "#007BE0",       # Azul RN Oficial
+        "INTERMEDIA": "#333333", # Gris Carbón
+        "BAJA": "#6AC64F"        # Verde RN Oficial
     }
     
     # Color Naranja Vibrante para destacar invitaciones especiales de manera inequívoca
@@ -381,10 +580,10 @@ with tab1:
             # Si tiene invitación, asignamos el Naranja y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
-                titulo_mostrar = f"✉️ {prefijo_hora}[{row['Localidad']}] {row['Actividad']}"
+                titulo_mostrar = f"✉️ {prefijo_hora}[{row['Ciudad']}] {row['Actividad']}"
             else:
                 color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
-                titulo_mostrar = f"{prefijo_hora}[{row['Localidad']}] {row['Actividad']}"
+                titulo_mostrar = f"{prefijo_hora}[{row['Ciudad']}] {row['Actividad']}"
                 
             events.append({
                 "title": titulo_mostrar,
@@ -394,8 +593,11 @@ with tab1:
                 "extendedProps": {
                     "fecha_original": str(row['Fecha']),
                     "hora": hora_val if tiene_hora else "No especificada",
+                    "ciudad": str(row['Ciudad']),
+                    "lugar": str(row['Lugar']),
+                    "explicacion": str(row['Explicación breve de la actividad']),
+                    "asistencia": int(row['Cantidad de personas estimadas']),
                     "organismo": str(row['Organismo/Actor']),
-                    "descripcion": str(row['Descripción']),
                     "estado": str(row['Estado']),
                     "publico": str(row['Público Destinatario']),
                     "prioridad": str(row['Prioridad']),
@@ -434,13 +636,14 @@ with tab1:
                 st.markdown(f"**📌 Actividad:** {clicked['title']}")
                 st.markdown(f"**📅 Fecha original:** `{props.get('fecha_original')}`")
                 st.markdown(f"**⏰ Hora:** `{props.get('hora')}`")
-                st.markdown(f"**🏢 Organismo/Actor:** {props.get('organismo')}")
-                st.markdown(f"**🎯 Público Destinatario:** {props.get('publico')}")
+                st.markdown(f"**📍 Ciudad:** {props.get('ciudad')}")
+                st.markdown(f"**🏢 Lugar físico:** {props.get('lugar')}")
+                st.markdown(f"**👥 Cantidad de personas estimadas:** `{props.get('asistencia')}`")
             with col_det2:
                 st.markdown(f"**🚨 Prioridad:** `{props.get('prioridad')}`")
                 st.markdown(f"**⚙️ Estado:** `{props.get('estado')}`")
                 st.markdown(f"**✉️ Invitación a participar:** `{props.get('invitacion')}`")
-                st.markdown(f"**📝 Descripción:** {props.get('descripcion')}")
+                st.markdown(f"**📝 Explicación breve:** {props.get('explicacion')}")
     else:
         st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
 
@@ -457,25 +660,26 @@ if es_editor and tab2 is not None:
             
             with col1:
                 f_fecha = st.date_input("Fecha programada", datetime.today())
-                f_hora = st.time_input("Hora del evento", value=time(9, 0)) # Campo para registrar la hora de inicio
+                f_hora = st.time_input("Hora del evento", value=time(9, 0)) 
                 f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
-                f_localidad = st.text_input("Localidad", placeholder="Ej: General Roca")
-                f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
+                f_ciudad = st.text_input("Ciudad", placeholder="Ej: General Roca")
+                f_lugar = st.text_input("Lugar / Espacio Físico", placeholder="Ej: Aula Magna UNRN")
+                f_asistencia = st.number_input("Cantidad de personas estimadas", min_value=0, step=10, value=50)
                 
             with col2:
+                f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
                 f_prioridad = st.selectbox("Nivel de Prioridad", ["ALTA", "INTERMEDIA", "BAJA"])
                 f_estado = st.selectbox("Estado Actual", ["Pendiente", "En curso", "Finalizado", "Suspendido"])
                 f_publico = st.text_input("Público Objetivo", placeholder="Ej: Jóvenes y adultos")
                 f_invitacion = st.text_input("Invitación a participar", placeholder="Ej: Gobernador + Secretaria de EEYA")
-                f_descripcion = st.text_area("Descripción de la acción / Notas")
+                f_explicacion = st.text_area("Explicación breve de la actividad")
                 
             submitted = st.form_submit_button("💾 Guardar en la Agenda")
             
             if submitted:
-                if not f_actividad or not f_localidad:
-                    st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Localidad'.")
+                if not f_actividad or not f_ciudad:
+                    st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
                 else:
-                    # Formatear la hora seleccionada como HH:MM
                     hora_formateada = f_hora.strftime("%H:%M")
                     
                     nueva_actividad = {
@@ -483,9 +687,11 @@ if es_editor and tab2 is not None:
                         "Hora": hora_formateada,
                         "Semana": int(f_fecha.isocalendar()[1]),
                         "Actividad": f_actividad,
-                        "Localidad": f_localidad.strip(),
+                        "Ciudad": f_ciudad.strip(),
+                        "Lugar": f_lugar.strip(),
+                        "Explicación breve de la actividad": f_explicacion,
+                        "Cantidad de personas estimadas": int(f_asistencia),
                         "Organismo/Actor": f_organismo,
-                        "Descripción": f_descripcion,
                         "Estado": f_estado,
                         "Público Destinatario": f_publico,
                         "Prioridad": f_prioridad,
@@ -511,7 +717,7 @@ if es_editor and tab3 is not None:
             
             opciones_actividades = []
             for idx, row in df_agenda.iterrows():
-                opciones_actividades.append(f"{idx} | [{row['Localidad']}] {row['Actividad']} ({row['Fecha']})")
+                opciones_actividades.append(f"{idx} | [{row['Ciudad']}] {row['Actividad']} ({row['Fecha']})")
                 
             actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
             
@@ -541,10 +747,18 @@ if es_editor and tab3 is not None:
                         ed_hora = st.time_input("Hora", value=hora_previa)
                         
                         ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
-                        ed_localidad = st.text_input("Localidad", value=str(registro_actual['Localidad']))
-                        ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
+                        ed_ciudad = st.text_input("Ciudad", value=str(registro_actual['Ciudad']))
+                        ed_lugar = st.text_input("Lugar / Espacio Físico", value=str(registro_actual.get('Lugar', '')))
+                        
+                        # Manejo seguro de la asistencia estimada
+                        try:
+                            asistencia_previa = int(registro_actual.get('Cantidad de personas estimadas', 50))
+                        except:
+                            asistencia_previa = 50
+                        ed_asistencia = st.number_input("Cantidad de personas estimadas", min_value=0, value=asistencia_previa)
                         
                     with col2_ed:
+                        ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
                         opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
                         def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
                         
@@ -555,7 +769,7 @@ if es_editor and tab3 is not None:
                         ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
                         ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
                         ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
-                        ed_descripcion = st.text_area("Descripción", value=str(registro_actual['Descripción']))
+                        ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', '')))
                     
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
@@ -568,9 +782,11 @@ if es_editor and tab3 is not None:
                         st.session_state.agenda.at[idx_seleccionado, 'Hora'] = ed_hora.strftime("%H:%M")
                         st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(ed_fecha.isocalendar()[1])
                         st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
-                        st.session_state.agenda.at[idx_seleccionado, 'Localidad'] = ed_localidad.strip()
+                        st.session_state.agenda.at[idx_seleccionado, 'Ciudad'] = ed_ciudad.strip()
+                        st.session_state.agenda.at[idx_seleccionado, 'Lugar'] = ed_lugar.strip()
+                        st.session_state.agenda.at[idx_seleccionado, 'Explicación breve de la actividad'] = ed_explicacion
+                        st.session_state.agenda.at[idx_seleccionado, 'Cantidad de personas estimadas'] = int(ed_asistencia)
                         st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
-                        st.session_state.agenda.at[idx_seleccionado, 'Descripción'] = ed_descripcion
                         st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
                         st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
                         st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
@@ -601,19 +817,21 @@ with tab4:
         with col_f1:
             search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
         with col_f2:
-            localidades_unicas = sorted(list(df_filtrado['Localidad'].astype(str).str.strip().unique()))
-            list_localidades = ["Todas"] + [loc for loc in localidades_unicas if loc != 'nan' and loc != '']
-            filtro_localidad = st.selectbox("Filtrar por Localidad", list_localidades, key="filter_loc_tab4")
+            ciudades_unicas = sorted(list(df_filtrado['Ciudad'].astype(str).str.strip().unique()))
+            list_ciudades = ["Todas"] + [c for c in ciudades_unicas if c != 'nan' and c != '']
+            filtro_ciudad = st.selectbox("Filtrar por Ciudad", list_ciudades, key="filter_loc_tab4")
             
-        # Filtrar localidad
-        if filtro_localidad != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Localidad'].str.strip() == filtro_localidad]
+        # Filtrar por Ciudad
+        if filtro_ciudad != "Todas":
+            df_filtrado = df_filtrado[df_filtrado['Ciudad'].str.strip() == filtro_ciudad]
             
         # Filtrar palabra clave
         if search_query:
             df_filtrado = df_filtrado[
                 df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Descripción'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Explicación breve de la actividad'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Lugar'].astype(str).str.lower().str.contains(search_query) |
+                df_filtrado['Ciudad'].astype(str).str.lower().str.contains(search_query) |
                 df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query) |
                 df_filtrado['Invitación a participar'].astype(str).str.lower().str.contains(search_query)
             ]
@@ -621,19 +839,39 @@ with tab4:
         # Renderizado de la tabla
         st.dataframe(df_filtrado, use_container_width=True)
         
-        # Exportador a Excel seguro
-        import io
-        output = io.BytesIO()
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df_filtrado.to_excel(writer, index=False, sheet_name='Agenda')
-        excel_bytes = output.getvalue()
+        # Botones de descarga de reportes uno al lado del otro
+        col_down1, col_down2, col_down3 = st.columns([1.5, 1.5, 3])
         
-        st.download_button(
-            label="📥 Descargar datos filtrados a Excel",
-            data=excel_bytes,
-            file_name="agenda_territorial_filtrada.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-            key="btn_download_tab4"
-        )
+        with col_down1:
+            # Exportador a Excel seguro
+            output_excel = io.BytesIO()
+            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
+                df_filtrado.to_excel(writer, index=False, sheet_name='Agenda')
+            excel_bytes = output_excel.getvalue()
+            
+            st.download_button(
+                label="📥 Descargar Excel de Datos",
+                data=excel_bytes,
+                file_name="agenda_territorial_filtrada.xlsx",
+                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                key="btn_download_excel",
+                use_container_width=True
+            )
+            
+        with col_down2:
+            # Exportador a Word formal con estilo institucional y la información exacta solicitada
+            try:
+                word_bytes = crear_reporte_word_areas(df_filtrado)
+                st.download_button(
+                    label="📝 Descargar Reporte en Word",
+                    data=word_bytes,
+                    file_name="Reporte_Agenda_Territorial_UPEU.docx",
+                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                    key="btn_download_word",
+                    use_container_width=True
+                )
+            except Exception as e:
+                st.error("Error al generar reporte de Word.")
+                
     else:
         st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
