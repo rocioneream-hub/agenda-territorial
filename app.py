@@ -278,7 +278,7 @@ def load_data():
         df['_temp_actividad'] = df['Actividad'].astype(str).str.strip().replace('', None)
         
         df = df[
-            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan') & (df['_temp_fecha'] != '')) |
+            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan' ) & (df['_temp_fecha'] != '')) |
             (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan') & (df['_temp_actividad'] != ''))
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
@@ -335,7 +335,7 @@ def set_cell_background(cell, color_hex):
         pass
 
 def crear_reporte_word_areas(df):
-    """Genera un reporte DOCX formal y libre de cualquier error o conflicto de librerías."""
+    """Genera un reporte DOCX formal y libre de cualquier error o conflicto de tipos de datos en Fecha."""
     doc = docx.Document()
     
     # Configuración segura de márgenes
@@ -444,8 +444,12 @@ def crear_reporte_word_areas(df):
     
     if total_acciones > 0:
         df_ordenado = df.copy()
-        if 'Fecha' in df_ordenado.columns:
+        # SOLUCIÓN CRÍTICA AL ERROR DE COMPARACIÓN: Forzar a que la columna de Fecha sea tratada enteramente como texto
+        try:
+            df_ordenado['Fecha'] = df_ordenado['Fecha'].astype(str).str.strip()
             df_ordenado = df_ordenado.sort_values(by='Fecha').reset_index(drop=True)
+        except:
+            pass # Si falla por alguna razón estructural, mantener el orden actual de la tabla
         
         for idx, row in df_ordenado.iterrows():
             p_act = doc.add_paragraph()
@@ -475,6 +479,9 @@ def crear_reporte_word_areas(df):
             
             # Campo 3: Fecha / Hora
             fecha_val = str(row.get('Fecha', 'Sin fecha'))
+            # Limpieza sutil si el texto de fecha incluye horas vacías (ej. "2026-07-16 00:00:00")
+            if "00:00:00" in fecha_val:
+                fecha_val = fecha_val.split(" ")[0]
             hora_val = str(row.get('Hora', '')).strip()
             hora_text = f" - {hora_val} hs" if hora_val else ""
             ficha_table.rows[2].cells[0].text = "Fecha y Horario:"
@@ -791,11 +798,11 @@ if es_editor and tab3 is not None:
                         opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
                         def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
                         
-                        opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
-                        def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
+                        options_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
+                        def_est = options_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in options_estado else 0
                         
                         ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
-                        ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
+                        ed_estado = st.selectbox("Estado", options_estado, index=def_est)
                         ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
                         ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
                         ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', registro_actual.get('Descripción', ''))))
