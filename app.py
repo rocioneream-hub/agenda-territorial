@@ -6,15 +6,16 @@ import re
 import os
 import io
 
-# Importación segura de la librería para generar documentos de Word
+# Importación segura de la librería python-docx
 try:
     import docx
     from docx.shared import Pt, Inches
     from docx.enum.text import WD_ALIGN_PARAGRAPH
     from docx.oxml import OxmlElement, parse_xml
     from docx.oxml.ns import nsdecls, qn
+    LIBRERIA_DOCX_LISTA = True
 except ImportError:
-    pass
+    LIBRERIA_DOCX_LISTA = False
 
 # ==========================================
 # 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
@@ -282,7 +283,7 @@ def load_data():
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
 
-        # Asegurar que existan todas las columnas requeridas (Adaptadas al nuevo reporte)
+        # Asegurar que existan todas las columnas requeridas
         columnas_requeridas = [
             'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
             'Explicación breve de la actividad', 'Cantidad de personas estimadas',
@@ -298,7 +299,7 @@ def load_data():
         df['Lugar'] = df['Lugar'].fillna("Sin especificar").astype(str).str.strip()
         df['Explicación breve de la actividad'] = df['Explicación breve de la actividad'].fillna("").astype(str)
         
-        # Validación de asistencia estimada
+        # Validación segura de asistencia estimada
         df['Cantidad de personas estimadas'] = pd.to_numeric(df['Cantidad de personas estimadas'], errors='coerce').fillna(0).astype(int)
         
         df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
@@ -322,19 +323,22 @@ if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
 
 # ==========================================
-# FUNCIONES AUXILIARES DE EXPORTACIÓN A WORD (ESTRUCTURA DE REPORTE FORMAL)
+# FUNCIONES AUXILIARES DE EXPORTACIÓN A WORD (CON FILTROS DE SEGURIDAD EXTREMOS)
 # ==========================================
 
 def set_cell_background(cell, color_hex):
     """Establece de manera segura el color de fondo de una celda en una tabla de Word."""
-    shading_xml = f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
-    cell._tc.get_or_add_tcPr().append(parse_xml(shading_xml))
+    try:
+        shading_xml = f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
+        cell._tc.get_or_add_tcPr().append(parse_xml(shading_xml))
+    except:
+        pass
 
 def crear_reporte_word_areas(df):
-    """Genera un reporte DOCX formal optimizado para compartir con otras áreas de gobierno."""
+    """Genera un reporte DOCX formal y tolerante a cualquier tipo de error o columna faltante."""
     doc = docx.Document()
     
-    # Configuración de márgenes estándar de oficina
+    # Configuración de márgenes estándar
     for section in doc.sections:
         section.top_margin = Inches(1)
         section.bottom_margin = Inches(1)
@@ -360,14 +364,12 @@ def crear_reporte_word_areas(df):
     
     # Línea divisoria decorativa
     p_line = doc.add_paragraph()
-    p_line.paragraph_format.space_before = Pt(0)
-    p_line.paragraph_format.space_after = Pt(20)
     p_line_border = OxmlElement('w:pBdr')
     bottom_border = OxmlElement('w:bottom')
     bottom_border.set(qn('w:val'), 'single')
     bottom_border.set(qn('w:sz'), '8')
     bottom_border.set(qn('w:space'), '1')
-    bottom_border.set(qn('w:color'), '007BE0') # Azul RN (#007BE0)
+    bottom_border.set(qn('w:color'), '007BE0') # Azul RN
     p_line_border.append(bottom_border)
     p_line._p.get_or_add_pPr().append(p_line_border)
     
@@ -382,18 +384,19 @@ def crear_reporte_word_areas(df):
     
     p_date = doc.add_paragraph()
     p_date.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | Documento de Coordinación Interinstitucional")
+    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | Coordinación Interinstitucional")
     run_date.font.italic = True
     run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
-    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL
+    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL (Protección si la columna de asistencia es nula)
     total_acciones = len(df)
-    total_personas = df['Cantidad de personas estimadas'].sum()
+    try:
+        total_personas = df['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
+    except:
+        total_personas = 0
     
     table_resumen = doc.add_table(rows=1, cols=2)
-    table_resumen.autofit = True
-    
     hdr_res = table_resumen.rows[0].cells
     hdr_res[0].text = "Total de Acciones Planificadas"
     hdr_res[1].text = "Asistencia Estimada Global"
@@ -419,84 +422,87 @@ def crear_reporte_word_areas(df):
         
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
     
-    # 4. DESGLOSE DE LAS ACTIVIDADES (Formato ficha ordenada por hojas/parrafos)
+    # 4. DESGLOSE DE LAS ACTIVIDADES
     doc.add_heading("Fichas de Planificación de Actividades", level=2)
-    doc.add_paragraph("A continuación se detallan las acciones territoriales ordenadas cronológicamente para la articulación entre las diversas áreas de la provincia:")
     
     if total_acciones > 0:
-        # Ordenamos las actividades por fecha para un reporte estructurado
-        df_ordenado = df.sort_values(by='Fecha').reset_index(drop=True)
+        # Aseguramos un orden temporal prolijo
+        df_ordenado = df.copy()
+        if 'Fecha' in df_ordenado.columns:
+            df_ordenado = df_ordenado.sort_values(by='Fecha').reset_index(drop=True)
         
         for idx, row in df_ordenado.iterrows():
             p_act = doc.add_paragraph()
             p_act.paragraph_format.space_before = Pt(14)
             p_act.paragraph_format.space_after = Pt(4)
             
-            # Encabezado del Evento
-            num_hora = f" - {row['Hora']} hs" if str(row['Hora']).strip() != "" else ""
-            run_header = p_act.add_run(f"📌 Actividad {idx+1}: {row['Actividad']}")
+            act_titulo = str(row.get('Actividad', 'Sin Nombre'))
+            run_header = p_act.add_run(f"📌 Actividad {idx+1}: {act_titulo}")
             run_header.font.bold = True
-            run_header.font.size = Pt(12)
+            run_header.font.size = Pt(11)
             run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
             
-            # Tabla de Ficha Técnica Individual para cada actividad (6 campos requeridos por el usuario)
-            ficha_table = doc.add_table(rows=5, cols=2)
+            # Tabla de Ficha Técnica Individual (6 Campos Requeridos)
+            ficha_table = doc.add_table(rows=6, cols=2)
             ficha_table.style = 'Light Shading Accent 1'
-            ficha_table.autofit = False
-            ficha_table.columns[0].width = Inches(2.2) # Campo
-            ficha_table.columns[1].width = Inches(4.3) # Contenido
+            ficha_table.columns[0].width = Inches(2.2)
+            ficha_table.columns[1].width = Inches(4.3)
             
-            # Configuración de Fila 1: Ciudad y Lugar
-            row_cells = ficha_table.rows[0].cells
-            row_cells[0].text = "Ciudad / Localidad:"
-            row_cells[1].text = str(row['Ciudad'])
+            # Campo 1: Actividad
+            ficha_table.rows[0].cells[0].text = "Actividad:"
+            ficha_table.rows[0].cells[1].text = act_titulo
             
-            # Configuración de Fila 2: Fecha y Hora
-            row_cells = ficha_table.rows[1].cells
-            row_cells[0].text = "Fecha y Horario:"
-            row_cells[1].text = f"{row['Fecha']}{num_hora}"
+            # Campo 2: Ciudad
+            ficha_table.rows[1].cells[0].text = "Ciudad / Localidad:"
+            ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
             
-            # Configuración de Fila 3: Lugar Específico
-            row_cells = ficha_table.rows[2].cells
-            row_cells[0].text = "Lugar / Espacio Físico:"
-            row_cells[1].text = str(row['Lugar'])
+            # Campo 3: Fecha / Hora
+            fecha_val = str(row.get('Fecha', 'Sin fecha'))
+            hora_val = str(row.get('Hora', '')).strip()
+            hora_text = f" - {hora_val} hs" if hora_val else ""
+            ficha_table.rows[2].cells[0].text = "Fecha y Horario:"
+            ficha_table.rows[2].cells[1].text = f"{fecha_val}{hora_text}"
             
-            # Configuración de Fila 4: Explicación Breve de la Acción
-            row_cells = ficha_table.rows[3].cells
-            row_cells[0].text = "Explicación breve de la actividad:"
-            row_cells[1].text = str(row['Explicación breve de la actividad'])
+            # Campo 4: Lugar
+            ficha_table.rows[3].cells[0].text = "Lugar / Espacio Físico:"
+            ficha_table.rows[3].cells[1].text = str(row.get('Lugar', 'Sin especificar'))
             
-            # Configuración de Fila 5: Personas Estimadas
-            row_cells = ficha_table.rows[4].cells
-            row_cells[0].text = "Cantidad de personas estimadas:"
-            row_cells[1].text = f"{row['Cantidad de personas estimadas']:,} asistentes"
+            # Campo 5: Explicación breve
+            exp_val = str(row.get('Explicación breve de la actividad', row.get('Descripción', 'Sin notas adicionales')))
+            ficha_table.rows[4].cells[0].text = "Explicación breve:"
+            ficha_table.rows[4].cells[1].text = exp_val
             
-            # Estilos internos de las fichas individuales
+            # Campo 6: Cantidad de personas estimadas
+            try:
+                asistencia_num = int(row.get('Cantidad de personas estimadas', 0))
+            except:
+                asistencia_num = 0
+            ficha_table.rows[5].cells[0].text = "Asistencia estimada:"
+            ficha_table.rows[5].cells[1].text = f"{asistencia_num:,} asistentes"
+            
+            # Formatear estilos de celdas de la tabla
             for r_idx, r in enumerate(ficha_table.rows):
-                # Negrita para la columna de los conceptos
                 r.cells[0].paragraphs[0].runs[0].font.bold = True
                 r.cells[0].paragraphs[0].runs[0].font.size = Pt(9.5)
                 r.cells[1].paragraphs[0].runs[0].font.size = Pt(9.5)
-                # Resaltar la última fila de asistencia en Verde RN
-                if r_idx == 4:
+                if r_idx == 5:
                     r.cells[1].paragraphs[0].runs[0].font.bold = True
-                    r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79)
+                    r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
             
-            p_sep = doc.add_paragraph()
-            p_sep.paragraph_format.space_after = Pt(8)
+            doc.add_paragraph().paragraph_format.space_after = Pt(6)
     else:
-        doc.add_paragraph("No se registran actividades programadas dentro de los criterios de búsqueda.")
+        doc.add_paragraph("No hay actividades cargadas para el reporte.")
         
-    # 5. PIE DE PÁGINA INSTITUCIONAL
+    # 5. PIE DE PÁGINA CON EL HASHTAG DE GESTIÓN
     p_footer = doc.add_paragraph()
     p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_footer.paragraph_format.space_before = Pt(35)
+    p_footer.paragraph_format.space_before = Pt(30)
     run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos")
     run_hashtag.font.bold = True
     run_hashtag.font.size = Pt(11)
     run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
     
-    # Guardar documento en buffer de memoria de forma ágil
+    # Guardar documento en buffer de memoria
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
@@ -580,10 +586,10 @@ with tab1:
             # Si tiene invitación, asignamos el Naranja y el emoji de sobre.
             if tiene_invitacion:
                 color_evento = COLOR_CON_INVITACION
-                titulo_mostrar = f"✉️ {prefijo_hora}[{row['Ciudad']}] {row['Actividad']}"
+                titulo_mostrar = f"✉️ {prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {row['Actividad']}"
             else:
                 color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
-                titulo_mostrar = f"{prefijo_hora}[{row['Ciudad']}] {row['Actividad']}"
+                titulo_mostrar = f"{prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {row['Actividad']}"
                 
             events.append({
                 "title": titulo_mostrar,
@@ -593,10 +599,10 @@ with tab1:
                 "extendedProps": {
                     "fecha_original": str(row['Fecha']),
                     "hora": hora_val if tiene_hora else "No especificada",
-                    "ciudad": str(row['Ciudad']),
-                    "lugar": str(row['Lugar']),
-                    "explicacion": str(row['Explicación breve de la actividad']),
-                    "asistencia": int(row['Cantidad de personas estimadas']),
+                    "ciudad": str(row.get('Ciudad', 'Sin especificar')),
+                    "lugar": str(row.get('Lugar', 'Sin especificar')),
+                    "explicacion": str(row.get('Explicación breve de la actividad', row.get('Descripción', ''))),
+                    "asistencia": int(row.get('Cantidad de personas estimadas', 0)),
                     "organismo": str(row['Organismo/Actor']),
                     "estado": str(row['Estado']),
                     "publico": str(row['Público Destinatario']),
@@ -717,7 +723,8 @@ if es_editor and tab3 is not None:
             
             opciones_actividades = []
             for idx, row in df_agenda.iterrows():
-                opciones_actividades.append(f"{idx} | [{row['Ciudad']}] {row['Actividad']} ({row['Fecha']})")
+                ciudad_txt = str(row.get('Ciudad', 'Sin especificar'))
+                opciones_actividades.append(f"{idx} | [{ciudad_txt}] {row['Actividad']} ({row['Fecha']})")
                 
             actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
             
@@ -738,7 +745,7 @@ if es_editor and tab3 is not None:
                             
                         ed_fecha = st.date_input("Fecha", value=fecha_previa)
                         
-                        # Manejo seguro de carga y edición del campo de Hora
+                        # Manejo de la Hora
                         hora_previa_str = str(registro_actual.get('Hora', '09:00')).strip()
                         try:
                             hora_previa = datetime.strptime(hora_previa_str, "%H:%M").time()
@@ -747,10 +754,9 @@ if es_editor and tab3 is not None:
                         ed_hora = st.time_input("Hora", value=hora_previa)
                         
                         ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
-                        ed_ciudad = st.text_input("Ciudad", value=str(registro_actual['Ciudad']))
+                        ed_ciudad = st.text_input("Ciudad", value=str(registro_actual.get('Ciudad', '')))
                         ed_lugar = st.text_input("Lugar / Espacio Físico", value=str(registro_actual.get('Lugar', '')))
                         
-                        # Manejo seguro de la asistencia estimada
                         try:
                             asistencia_previa = int(registro_actual.get('Cantidad de personas estimadas', 50))
                         except:
@@ -769,7 +775,7 @@ if es_editor and tab3 is not None:
                         ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
                         ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
                         ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
-                        ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', '')))
+                        ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', registro_actual.get('Descripción', ''))))
                     
                     col_btn1, col_btn2 = st.columns(2)
                     with col_btn1:
@@ -839,7 +845,7 @@ with tab4:
         # Renderizado de la tabla
         st.dataframe(df_filtrado, use_container_width=True)
         
-        # Botones de descarga de reportes uno al lado del otro
+        # Botones de descarga de reportes
         col_down1, col_down2, col_down3 = st.columns([1.5, 1.5, 3])
         
         with col_down1:
@@ -859,19 +865,22 @@ with tab4:
             )
             
         with col_down2:
-            # Exportador a Word formal con estilo institucional y la información exacta solicitada
-            try:
-                word_bytes = crear_reporte_word_areas(df_filtrado)
-                st.download_button(
-                    label="📝 Descargar Reporte en Word",
-                    data=word_bytes,
-                    file_name="Reporte_Agenda_Territorial_UPEU.docx",
-                    mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                    key="btn_download_word",
-                    use_container_width=True
-                )
-            except Exception as e:
-                st.error("Error al generar reporte de Word.")
+            # Botón de Word condicionado a que la instalación en requirements.txt haya finalizado
+            if LIBRERIA_DOCX_LISTA:
+                try:
+                    word_bytes = crear_reporte_word_areas(df_filtrado)
+                    st.download_button(
+                        label="📝 Descargar Reporte en Word",
+                        data=word_bytes,
+                        file_name="Reporte_Agenda_Territorial_UPEU.docx",
+                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+                        key="btn_download_word",
+                        use_container_width=True
+                    )
+                except Exception as e:
+                    st.error("Error temporal al procesar el archivo de Word.")
+            else:
+                st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes y recarga la página.")
                 
     else:
         st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
