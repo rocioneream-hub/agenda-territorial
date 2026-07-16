@@ -1,7 +1,7 @@
 import streamlit as st
 import pandas as pd
 from streamlit_calendar import calendar
-from datetime import datetime, time
+from datetime import datetime, time, date
 import re
 import os
 import io
@@ -278,7 +278,7 @@ def load_data():
         df['_temp_actividad'] = df['Actividad'].astype(str).str.strip().replace('', None)
         
         df = df[
-            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan' ) & (df['_temp_fecha'] != '')) |
+            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan') & (df['_temp_fecha'] != '')) |
             (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan') & (df['_temp_actividad'] != ''))
         ]
         df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
@@ -334,11 +334,30 @@ def set_cell_background(cell, color_hex):
     except:
         pass
 
-def crear_reporte_word_areas(df):
-    """Genera un reporte DOCX formal y libre de cualquier error o conflicto de tipos de datos en Fecha."""
+def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
+    """Genera un reporte DOCX formal filtrando opcionalmente desde la fecha de hoy en adelante."""
     doc = docx.Document()
+    hoy_date = date.today()
     
-    # Configuración segura de márgenes
+    # Clonamos el DataFrame para no alterar la visualización en pantalla de la tabla
+    df_procesar = df.copy()
+    
+    # 1. Aplicación del filtro dinámico temporal si se solicita "Desde hoy en adelante"
+    if filtrar_desde_hoy:
+        fechas_limpias = []
+        for idx, row in df_procesar.iterrows():
+            f_str = limpiar_fecha_para_calendario(row['Fecha'])
+            try:
+                # Convertimos la fecha limpia a objeto date para poder comparar matemáticamente
+                fechas_limpias.append(datetime.strptime(f_str, "%Y-%m-%d").date())
+            except:
+                # Si la fecha está mal estructurada o vacía, le asignamos una fecha muy vieja para que no califique como futura
+                fechas_limpias.append(date(2000, 1, 1))
+        
+        df_procesar['_fecha_comparar'] = fechas_limpias
+        df_procesar = df_procesar[df_procesar['_fecha_comparar'] >= hoy_date].drop(columns=['_fecha_comparar'])
+    
+    # Configuración de márgenes estándar
     try:
         for section in doc.sections:
             section.top_margin = Inches(1)
@@ -353,7 +372,7 @@ def crear_reporte_word_areas(df):
     font.name = 'Calibri'
     font.size = Pt(11)
     
-    # 1. MEMBRETADO INSTITUCIONAL
+    # MEMBRETADO INSTITUCIONAL
     p_header = doc.add_paragraph()
     p_header.alignment = WD_ALIGN_PARAGRAPH.LEFT
     run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n")
@@ -385,10 +404,12 @@ def crear_reporte_word_areas(df):
     except:
         pass
     
-    # 2. TÍTULOS PRINCIPALES
+    # TÍTULOS PRINCIPALES
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run_title = p_title.add_run("REPORTE EJECUTIVO DE ACTIVIDADES TERRITORIALES")
+    
+    titulo_texto = "REPORTE PLANIFICACIÓN TERRITORIAL FUTURA" if filtrar_desde_hoy else "REPORTE COMPLETO DE ACTIVIDADES TERRITORIALES"
+    run_title = p_title.add_run(titulo_texto)
     run_title.font.bold = True
     run_title.font.size = Pt(15)
     try:
@@ -399,22 +420,24 @@ def crear_reporte_word_areas(df):
     
     p_date = doc.add_paragraph()
     p_date.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | Coordinación Interinstitucional")
+    
+    rango_texto = f"Acciones programadas desde el {hoy_date.strftime('%d/%m/%Y')} en adelante" if filtrar_desde_hoy else "Historial completo de gestión"
+    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {rango_texto}")
     run_date.font.italic = True
     run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
-    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL
-    total_acciones = len(df)
+    # CUADRO RESUMEN DE ASISTENCIA GLOBAL
+    total_acciones = len(df_procesar)
     try:
-        total_personas = df['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
+        total_personas = df_procesar['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
     except:
         total_personas = 0
     
     table_resumen = doc.add_table(rows=2, cols=2)
     hdr_res = table_resumen.rows[0].cells
-    hdr_res[0].text = "Total de Acciones Planificadas"
-    hdr_res[1].text = "Asistencia Estimada Global"
+    hdr_res[0].text = "Acciones en el Reporte"
+    hdr_res[1].text = "Proyección de Asistentes Global"
     
     for cell in hdr_res:
         set_cell_background(cell, "F5F5F5")
@@ -439,17 +462,17 @@ def crear_reporte_word_areas(df):
         
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
     
-    # 4. DESGLOSE DE LAS ACTIVIDADES
+    # DESGLOSE DE LAS ACTIVIDADES
     doc.add_heading("Fichas de Planificación de Actividades", level=2)
     
     if total_acciones > 0:
-        df_ordenado = df.copy()
-        # SOLUCIÓN CRÍTICA AL ERROR DE COMPARACIÓN: Forzar a que la columna de Fecha sea tratada enteramente como texto
+        df_ordenado = df_procesar.copy()
+        # Tratamiento seguro de la columna de Fecha como texto para ordenamiento idéntico
         try:
             df_ordenado['Fecha'] = df_ordenado['Fecha'].astype(str).str.strip()
             df_ordenado = df_ordenado.sort_values(by='Fecha').reset_index(drop=True)
         except:
-            pass # Si falla por alguna razón estructural, mantener el orden actual de la tabla
+            pass
         
         for idx, row in df_ordenado.iterrows():
             p_act = doc.add_paragraph()
@@ -479,7 +502,6 @@ def crear_reporte_word_areas(df):
             
             # Campo 3: Fecha / Hora
             fecha_val = str(row.get('Fecha', 'Sin fecha'))
-            # Limpieza sutil si el texto de fecha incluye horas vacías (ej. "2026-07-16 00:00:00")
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
             hora_val = str(row.get('Hora', '')).strip()
@@ -504,7 +526,7 @@ def crear_reporte_word_areas(df):
             ficha_table.rows[5].cells[0].text = "Asistencia estimada:"
             ficha_table.rows[5].cells[1].text = f"{asistencia_num:,} asistentes"
             
-            # Formatear estilos de celdas de la tabla de forma segura
+            # Formatear estilos de celdas
             for r_idx, r in enumerate(ficha_table.rows):
                 try:
                     r.cells[0].paragraphs[0].runs[0].font.bold = True
@@ -518,9 +540,9 @@ def crear_reporte_word_areas(df):
             
             doc.add_paragraph().paragraph_format.space_after = Pt(6)
     else:
-        doc.add_paragraph("No hay actividades cargadas para el reporte.")
+        doc.add_paragraph(f"No se registran actividades planificadas para el rango seleccionado ({rango_texto}).")
         
-    # 5. PIE DE PÁGINA CON EL HASHTAG DE GESTIÓN
+    # PIE DE PÁGINA CON EL HASHTAG DE GESTIÓN
     p_footer = doc.add_paragraph()
     p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
     p_footer.paragraph_format.space_before = Pt(30)
@@ -542,7 +564,7 @@ def crear_reporte_word_areas(df):
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se renderiza en SVG con un ancho elegante de 180px para máxima definición
+# El logo se renderiza en SVG con un ancho de 180px para máxima definición
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, width=180)
 else:
@@ -798,11 +820,11 @@ if es_editor and tab3 is not None:
                         opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
                         def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
                         
-                        options_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
-                        def_est = options_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in options_estado else 0
+                        opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
+                        def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
                         
                         ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
-                        ed_estado = st.selectbox("Estado", options_estado, index=def_est)
+                        ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
                         ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
                         ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
                         ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', registro_actual.get('Descripción', ''))))
@@ -872,37 +894,71 @@ with tab4:
                 df_filtrado['Invitación a participar'].astype(str).str.lower().str.contains(search_query)
             ]
             
-        # Renderizado de la tabla
+        # Renderizado de la tabla en pantalla
         st.dataframe(df_filtrado, use_container_width=True)
         
-        # Botones de descarga de reportes
-        col_down1, col_down2, col_down3 = st.columns([1.5, 1.5, 3])
+        # ==========================================
+        # INTERFAZ DE EXPORTACIÓN Y CONFIGURACIÓN DE REPORTES
+        # ==========================================
+        st.markdown("### 📤 Generar y Exportar Documentos")
+        
+        col_config, col_down1, col_down2 = st.columns([2, 1.5, 1.5])
+        
+        with col_config:
+            # Selector dinámico del alcance temporal de los archivos a descargar
+            rango_reporte = st.radio(
+                "Alcance temporal de la descarga:",
+                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante"],
+                help="Determina si los archivos descargados incluirán todo el historial o solo las acciones a futuro.",
+                horizontal=False
+            )
+            solo_futuras = (rango_reporte == "Desde Hoy hacia adelante")
+            
+            # Procesamos de manera segura el DataFrame de descarga
+            df_descarga = df_filtrado.copy()
+            if solo_futuras:
+                hoy_date = date.today()
+                fechas_comparacion = []
+                for idx, row in df_descarga.iterrows():
+                    f_str = limpiar_fecha_para_calendario(row['Fecha'])
+                    try:
+                        fechas_comparacion.append(datetime.strptime(f_str, "%Y-%m-%d").date())
+                    except:
+                        fechas_comparacion.append(date(2000, 1, 1))
+                df_descarga['_comparar'] = fechas_comparacion
+                df_descarga = df_descarga[df_descarga['_comparar'] >= hoy_date].drop(columns=['_comparar'])
         
         with col_down1:
+            st.write("") # Espaciador alineador
+            st.write("")
             # Exportador a Excel seguro
             output_excel = io.BytesIO()
             with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                df_filtrado.to_excel(writer, index=False, sheet_name='Agenda')
+                df_descarga.to_excel(writer, index=False, sheet_name='Agenda')
             excel_bytes = output_excel.getvalue()
             
+            nombre_excel = "agenda_futura_territorial.xlsx" if solo_futuras else "agenda_completa_territorial.xlsx"
             st.download_button(
-                label="📥 Descargar Excel de Datos",
+                label="📥 Descargar Excel",
                 data=excel_bytes,
-                file_name="agenda_territorial_filtrada.xlsx",
+                file_name=nombre_excel,
                 mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 key="btn_download_excel",
                 use_container_width=True
             )
             
         with col_down2:
-            # Botón de Word corregido y robustecido
+            st.write("") # Espaciador alineador
+            st.write("")
+            # Botón de Word corregido y robustecido para descargas dinámicas
             if LIBRERIA_DOCX_LISTA:
                 try:
-                    word_bytes = crear_reporte_word_areas(df_filtrado)
+                    word_bytes = crear_reporte_word_areas(df_filtrado, filtrar_desde_hoy=solo_futuras)
+                    nombre_word = "Reporte_Agenda_Futura_UPEU.docx" if solo_futuras else "Reporte_Agenda_Completa_UPEU.docx"
                     st.download_button(
-                        label="📝 Descargar Reporte en Word",
+                        label="📝 Descargar Reporte Word",
                         data=word_bytes,
-                        file_name="Reporte_Agenda_Territorial_UPEU.docx",
+                        file_name=nombre_word,
                         mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
                         key="btn_download_word",
                         use_container_width=True
@@ -910,7 +966,7 @@ with tab4:
                 except Exception as e:
                     st.error(f"Error técnico en el formato: {e}")
             else:
-                st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes y recarga la página.")
+                st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes.")
                 
     else:
         st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
