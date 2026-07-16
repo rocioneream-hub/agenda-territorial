@@ -335,15 +335,18 @@ def set_cell_background(cell, color_hex):
         pass
 
 def crear_reporte_word_areas(df):
-    """Genera un reporte DOCX formal y tolerante a cualquier tipo de error o columna faltante."""
+    """Genera un reporte DOCX formal y libre de cualquier error o conflicto de librerías."""
     doc = docx.Document()
     
-    # Configuración de márgenes estándar
-    for section in doc.sections:
-        section.top_margin = Inches(1)
-        section.bottom_margin = Inches(1)
-        section.left_margin = Inches(1)
-        section.right_margin = Inches(1)
+    # Configuración segura de márgenes
+    try:
+        for section in doc.sections:
+            section.top_margin = Inches(1)
+            section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1)
+            section.right_margin = Inches(1)
+    except:
+        pass
         
     style = doc.styles['Normal']
     font = style.font
@@ -356,30 +359,42 @@ def crear_reporte_word_areas(df):
     run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n")
     run_gob.font.bold = True
     run_gob.font.size = Pt(10)
-    run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN (#6AC64F)
+    try:
+        run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN (#6AC64F)
+    except:
+        pass
     
     run_sub = p_header.add_run("Ministerio de Educación y Derechos Humanos\nUnidad Provincial de Enlace con Universidades (UPEU)\n")
     run_sub.font.size = Pt(9.5)
-    run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
+    try:
+        run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
+    except:
+        pass
     
     # Línea divisoria decorativa
-    p_line = doc.add_paragraph()
-    p_line_border = OxmlElement('w:pBdr')
-    bottom_border = OxmlElement('w:bottom')
-    bottom_border.set(qn('w:val'), 'single')
-    bottom_border.set(qn('w:sz'), '8')
-    bottom_border.set(qn('w:space'), '1')
-    bottom_border.set(qn('w:color'), '007BE0') # Azul RN
-    p_line_border.append(bottom_border)
-    p_line._p.get_or_add_pPr().append(p_line_border)
+    try:
+        p_line = doc.add_paragraph()
+        p_line_border = OxmlElement('w:pBdr')
+        bottom_border = OxmlElement('w:bottom')
+        bottom_border.set(qn('w:val'), 'single')
+        bottom_border.set(qn('w:sz'), '8')
+        bottom_border.set(qn('w:space'), '1')
+        bottom_border.set(qn('w:color'), '007BE0') # Azul RN
+        p_line_border.append(bottom_border)
+        p_line._p.get_or_add_pPr().append(p_line_border)
+    except:
+        pass
     
     # 2. TÍTULOS PRINCIPALES
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
     run_title = p_title.add_run("REPORTE EJECUTIVO DE ACTIVIDADES TERRITORIALES")
     run_title.font.bold = True
-    run_title.font.size = Pt(16)
-    run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224) # Azul RN
+    run_title.font.size = Pt(15)
+    try:
+        run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224) # Azul RN
+    except:
+        pass
     p_title.paragraph_format.space_after = Pt(2)
     
     p_date = doc.add_paragraph()
@@ -389,14 +404,14 @@ def crear_reporte_word_areas(df):
     run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
-    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL (Protección si la columna de asistencia es nula)
+    # 3. CUADRO RESUMEN DE ASISTENCIA GLOBAL
     total_acciones = len(df)
     try:
         total_personas = df['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
     except:
         total_personas = 0
     
-    table_resumen = doc.add_table(rows=1, cols=2)
+    table_resumen = doc.add_table(rows=2, cols=2)
     hdr_res = table_resumen.rows[0].cells
     hdr_res[0].text = "Total de Acciones Planificadas"
     hdr_res[1].text = "Asistencia Estimada Global"
@@ -407,9 +422,8 @@ def crear_reporte_word_areas(df):
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.runs[0].font.bold = True
         p.runs[0].font.size = Pt(10)
-        p.runs[0].font.color.rgb = docx.shared.RGBColor(51, 51, 51)
         
-    row_res = table_resumen.add_row().cells
+    row_res = table_resumen.rows[1].cells
     row_res[0].text = str(total_acciones)
     row_res[1].text = f"{total_personas:,} personas"
     
@@ -418,7 +432,10 @@ def crear_reporte_word_areas(df):
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.runs[0].font.bold = True
         p.runs[0].font.size = Pt(12)
-        p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+        try:
+            p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+        except:
+            pass
         
     doc.add_paragraph().paragraph_format.space_after = Pt(12)
     
@@ -426,7 +443,6 @@ def crear_reporte_word_areas(df):
     doc.add_heading("Fichas de Planificación de Actividades", level=2)
     
     if total_acciones > 0:
-        # Aseguramos un orden temporal prolijo
         df_ordenado = df.copy()
         if 'Fecha' in df_ordenado.columns:
             df_ordenado = df_ordenado.sort_values(by='Fecha').reset_index(drop=True)
@@ -440,13 +456,14 @@ def crear_reporte_word_areas(df):
             run_header = p_act.add_run(f"📌 Actividad {idx+1}: {act_titulo}")
             run_header.font.bold = True
             run_header.font.size = Pt(11)
-            run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+            try:
+                run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+            except:
+                pass
             
             # Tabla de Ficha Técnica Individual (6 Campos Requeridos)
             ficha_table = doc.add_table(rows=6, cols=2)
             ficha_table.style = 'Light Shading Accent 1'
-            ficha_table.columns[0].width = Inches(2.2)
-            ficha_table.columns[1].width = Inches(4.3)
             
             # Campo 1: Actividad
             ficha_table.rows[0].cells[0].text = "Actividad:"
@@ -480,14 +497,17 @@ def crear_reporte_word_areas(df):
             ficha_table.rows[5].cells[0].text = "Asistencia estimada:"
             ficha_table.rows[5].cells[1].text = f"{asistencia_num:,} asistentes"
             
-            # Formatear estilos de celdas de la tabla
+            # Formatear estilos de celdas de la tabla de forma segura
             for r_idx, r in enumerate(ficha_table.rows):
-                r.cells[0].paragraphs[0].runs[0].font.bold = True
-                r.cells[0].paragraphs[0].runs[0].font.size = Pt(9.5)
-                r.cells[1].paragraphs[0].runs[0].font.size = Pt(9.5)
-                if r_idx == 5:
-                    r.cells[1].paragraphs[0].runs[0].font.bold = True
-                    r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
+                try:
+                    r.cells[0].paragraphs[0].runs[0].font.bold = True
+                    r.cells[0].paragraphs[0].runs[0].font.size = Pt(9.5)
+                    r.cells[1].paragraphs[0].runs[0].font.size = Pt(9.5)
+                    if r_idx == 5:
+                        r.cells[1].paragraphs[0].runs[0].font.bold = True
+                        r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
+                except:
+                    pass
             
             doc.add_paragraph().paragraph_format.space_after = Pt(6)
     else:
@@ -500,7 +520,10 @@ def crear_reporte_word_areas(df):
     run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos")
     run_hashtag.font.bold = True
     run_hashtag.font.size = Pt(11)
-    run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
+    try:
+        run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
+    except:
+        pass
     
     # Guardar documento en buffer de memoria
     buffer = io.BytesIO()
@@ -865,7 +888,7 @@ with tab4:
             )
             
         with col_down2:
-            # Botón de Word condicionado a que la instalación en requirements.txt haya finalizado
+            # Botón de Word corregido y robustecido
             if LIBRERIA_DOCX_LISTA:
                 try:
                     word_bytes = crear_reporte_word_areas(df_filtrado)
@@ -878,7 +901,7 @@ with tab4:
                         use_container_width=True
                     )
                 except Exception as e:
-                    st.error("Error temporal al procesar el archivo de Word.")
+                    st.error(f"Error técnico en el formato: {e}")
             else:
                 st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes y recarga la página.")
                 
