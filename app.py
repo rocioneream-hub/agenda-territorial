@@ -37,7 +37,7 @@ st.markdown("""
         font-family: 'Figtree', sans-serif !important;
     }
     
-    /* Fondo general utilizando estrictamente el Gris RN oficial (#E8E8E8) */
+    /* Fondo general utilizando el Gris RN oficial (#E8E8E8) */
     .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"] { 
         background-color: #E8E8E8 !important; 
         background: #E8E8E8 !important;
@@ -97,19 +97,13 @@ st.markdown("""
     /* ==========================================
        ANULAR EL ROJO NATIVO DE STREAMLIT (TABS Y SELECCIONES)
        ========================================== */
-    
-    /* Cambiar la línea roja inferior de las Pestañas Activas a Azul RN */
     div[data-baseweb="tab-list"] button[aria-selected="true"] {
         color: #007BE0 !important;
         border-bottom-color: #007BE0 !important;
     }
-    
-    /* Cambiar el texto de las pestañas no seleccionadas a negro */
     div[data-baseweb="tab-list"] button[aria-selected="false"] {
         color: #333333 !important;
     }
-
-    /* Cambiar el borde de enfoque en inputs y dropdowns a Azul RN */
     .stTextInput input:focus, 
     .stSelectbox div[role="button"]:focus, 
     .stTextArea textarea:focus,
@@ -117,8 +111,6 @@ st.markdown("""
         border-color: #007BE0 !important;
         box-shadow: 0 0 0 1px #007BE0 !important;
     }
-
-    /* Cambiar el color de los Spinners de carga a Verde RN */
     div[data-testid="stSpinner"] > div {
         border-top-color: #6AC64F !important;
     }
@@ -126,8 +118,6 @@ st.markdown("""
     /* ==========================================
        PERSONALIZACIÓN CSS PARA EL CALENDARIO (FULLCALENDAR)
        ========================================== */
-    
-    /* Forzar color Azul RN en botones nativos del calendario */
     .fc .fc-button,
     .fc .fc-button-primary,
     .fc-button,
@@ -147,8 +137,6 @@ st.markdown("""
         text-transform: capitalize !important;
         transition: background-color 0.2s ease, border-color 0.2s ease !important;
     }
-
-    /* Hover en los botones (Verde RN) */
     .fc .fc-button:hover,
     .fc .fc-button-primary:hover,
     .fc-button:hover,
@@ -162,8 +150,6 @@ st.markdown("""
         border-color: #6AC64F !important;
         color: #FFFFFF !important;
     }
-
-    /* Botón activo seleccionado (Azul RN Oscuro) */
     .fc .fc-button-primary:not(:disabled).fc-button-active, 
     .fc .fc-button-primary:not(:disabled):active,
     .fc-button-active,
@@ -174,19 +160,14 @@ st.markdown("""
         border-color: #00569E !important;
         color: #FFFFFF !important;
     }
-
-    /* Cabeceras de los días del calendario */
     .fc .fc-col-header-cell-cushion {
         color: #000000 !important;
         font-weight: 700 !important;
         text-decoration: none !important;
     }
-
     .fc-event, .fc-event-dot {
         border-color: transparent !important;
     }
-
-    /* Día de hoy (celeste sutil y número azul) */
     .fc .fc-daygrid-day.fc-day-today {
         background-color: rgba(0, 123, 224, 0.08) !important;
     }
@@ -197,8 +178,6 @@ st.markdown("""
     .fc .fc-day-today .fc-daygrid-day-top {
         border-top: 3px solid #007BE0 !important;
     }
-
-    /* Indicador de hora actual en Verde RN */
     .fc .fc-timegrid-now-indicator-line {
         border-color: #6AC64F !important;
         border-width: 2px !important;
@@ -207,11 +186,9 @@ st.markdown("""
         border-top-color: #6AC64F !important;
         border-bottom-color: #6AC64F !important;
     }
-    
     </style>
 """, unsafe_allow_html=True)
 
-# Nombre del archivo Excel de base de datos e ISOLOGO vectorial
 EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
 LOGO_FILE = "isologo_RN.svg"
 
@@ -334,26 +311,9 @@ def set_cell_background(cell, color_hex):
     except:
         pass
 
-def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
-    """Genera un reporte DOCX formal filtrando opcionalmente desde la fecha de hoy en adelante."""
+def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TERRITORIAL", aclaracion_rango=""):
+    """Genera un reporte DOCX formal respetando exactamente los títulos y alcances seleccionados."""
     doc = docx.Document()
-    hoy_date = date.today()
-    
-    # Clonamos el DataFrame para no alterar la visualización en pantalla de la tabla
-    df_procesar = df.copy()
-    
-    # Aplicación del filtro dinámico temporal si se solicita "Desde hoy en adelante"
-    if filtrar_desde_hoy:
-        fechas_limpias = []
-        for idx, row in df_procesar.iterrows():
-            f_str = limpiar_fecha_para_calendario(row['Fecha'])
-            try:
-                fechas_limpias.append(datetime.strptime(f_str, "%Y-%m-%d").date())
-            except:
-                fechas_limpias.append(date(2000, 1, 1))
-        
-        df_procesar['_fecha_comparar'] = fechas_limpias
-        df_procesar = df_procesar[df_procesar['_fecha_comparar'] >= hoy_date].drop(columns=['_fecha_comparar'])
     
     # Configuración de márgenes estándar
     try:
@@ -402,12 +362,10 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
     except:
         pass
     
-    # TÍTULOS PRINCIPALES
+    # TÍTULO PRINCIPAL
     p_title = doc.add_paragraph()
     p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    
-    titulo_texto = "REPORTE PLANIFICACIÓN TERRITORIAL FUTURA" if filtrar_desde_hoy else "REPORTE COMPLETO DE ACTIVIDADES TERRITORIALES"
-    run_title = p_title.add_run(titulo_texto)
+    run_title = p_title.add_run(titulo_personalizado.upper())
     run_title.font.bold = True
     run_title.font.size = Pt(15)
     try:
@@ -419,16 +377,16 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
     p_date = doc.add_paragraph()
     p_date.alignment = WD_ALIGN_PARAGRAPH.LEFT
     
-    rango_texto = f"Acciones programadas desde el {hoy_date.strftime('%d/%m/%Y')} en adelante" if filtrar_desde_hoy else "Historial completo de gestión"
-    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {rango_texto}")
+    aclaracion_texto = aclaracion_rango if aclaracion_rango else "Coordinación de Planificación"
+    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {aclaracion_texto}")
     run_date.font.italic = True
     run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
     # CUADRO RESUMEN DE ASISTENCIA GLOBAL
-    total_acciones = len(df_procesar)
+    total_acciones = len(df)
     try:
-        total_personas = df_procesar['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
+        total_personas = df['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
     except:
         total_personas = 0
     
@@ -464,10 +422,10 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
     doc.add_heading("Fichas de Planificación de Actividades", level=2)
     
     if total_acciones > 0:
-        df_ordenado = df_procesar.copy()
+        df_ordenado = df.copy()
         try:
-            df_ordenado['Fecha'] = df_ordenado['Fecha'].astype(str).str.strip()
-            df_ordenado = df_ordenado.sort_values(by='Fecha').reset_index(drop=True)
+            df_ordenado['Fecha_Limpia'] = df_ordenado['Fecha'].apply(limpiar_fecha_para_calendario)
+            df_ordenado = df_ordenado.sort_values(by='Fecha_Limpia').reset_index(drop=True)
         except:
             pass
         
@@ -485,7 +443,7 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
             except:
                 pass
             
-            # Tabla de Ficha Técnica Individual (6 Campos Requeridos)
+            # Tabla de Ficha Técnica Individual (Los 6 campos clave)
             ficha_table = doc.add_table(rows=6, cols=2)
             ficha_table.style = 'Light Shading Accent 1'
             
@@ -494,25 +452,25 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
             ficha_table.rows[0].cells[1].text = act_titulo
             
             # Campo 2: Ciudad
-            ficha_table.rows[1].cells[0].text = "Ciudad / Localidad:"
+            ficha_table.rows[1].cells[0].text = "Ciudad:"
             ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
             
-            # Campo 3: Fecha / Hora
+            # Campo 3: Fecha
             fecha_val = str(row.get('Fecha', 'Sin fecha'))
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
             hora_val = str(row.get('Hora', '')).strip()
             hora_text = f" - {hora_val} hs" if hora_val else ""
-            ficha_table.rows[2].cells[0].text = "Fecha y Horario:"
+            ficha_table.rows[2].cells[0].text = "Fecha:"
             ficha_table.rows[2].cells[1].text = f"{fecha_val}{hora_text}"
             
             # Campo 4: Lugar
-            ficha_table.rows[3].cells[0].text = "Lugar / Espacio Físico:"
+            ficha_table.rows[3].cells[0].text = "Lugar:"
             ficha_table.rows[3].cells[1].text = str(row.get('Lugar', 'Sin especificar'))
             
-            # Campo 5: Explicación breve
+            # Campo 5: Explicación breve de la actividad
             exp_val = str(row.get('Explicación breve de la actividad', row.get('Descripción', 'Sin notas adicionales')))
-            ficha_table.rows[4].cells[0].text = "Explicación breve:"
+            ficha_table.rows[4].cells[0].text = "Explicación breve de la actividad:"
             ficha_table.rows[4].cells[1].text = exp_val
             
             # Campo 6: Cantidad de personas estimadas
@@ -520,7 +478,7 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
                 asistencia_num = int(row.get('Cantidad de personas estimadas', 0))
             except:
                 asistencia_num = 0
-            ficha_table.rows[5].cells[0].text = "Asistencia estimada:"
+            ficha_table.rows[5].cells[0].text = "Cantidad de personas estimadas:"
             ficha_table.rows[5].cells[1].text = f"{asistencia_num:,} asistentes"
             
             # Formatear estilos de celdas
@@ -537,7 +495,7 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
             
             doc.add_paragraph().paragraph_format.space_after = Pt(6)
     else:
-        doc.add_paragraph(f"No se registran actividades planificadas para el rango seleccionado ({rango_texto}).")
+        doc.add_paragraph(f"No se registran actividades para los criterios de búsqueda actuales.")
         
     # PIE DE PÁGINA CON EL HASHTAG DE GESTIÓN
     p_footer = doc.add_paragraph()
@@ -558,14 +516,11 @@ def crear_reporte_word_areas(df, filtrar_desde_hoy=False):
     return buffer.getvalue()
 
 # ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CORREGIDA E INTEGRADA)
+# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP
 # ==========================================
-def generar_mensaje_whatsapp(df, es_futuro=False):
-    """Genera una cadena de texto para WhatsApp adaptada estrictamente a los 6 campos del reporte de Word."""
-    hoy_date = date.today()
+def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
     
-    # Intentar ordenar cronológicamente de forma segura
     try:
         df_procesar['Fecha_Limpia'] = df_procesar['Fecha'].apply(limpiar_fecha_para_calendario)
         df_procesar = df_procesar.sort_values(by='Fecha_Limpia').reset_index(drop=True)
@@ -574,13 +529,7 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
         
     lines = []
     lines.append("🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*")
-    
-    # Cabecera exacta según el filtro dinámico
-    if es_futuro:
-        lines.append(f"📅 *Agenda de actividades futuras* (Desde hoy {hoy_date.strftime('%d/%m/%Y')}):")
-    else:
-        lines.append("📅 *Agenda completa de actividades*:")
-        
+    lines.append(f"📅 *{titulo_cabecera}*:")
     lines.append("─────────────────────")
     
     total_eventos = len(df_procesar)
@@ -590,7 +539,6 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
         for idx, row in df_procesar.iterrows():
             act_titulo = str(row.get('Actividad', 'Sin Nombre')).upper().strip()
             
-            # Tratamiento y limpieza de fecha/hora
             fecha_val = str(row.get('Fecha', 'Sin fecha'))
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
@@ -608,21 +556,18 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
             except:
                 asistencia_txt = "Sin especificar"
                 
-            # Renderizado de los 6 campos solicitados (con emojis correspondientes)
             lines.append(f"📌 *Actividad {idx+1}:* {act_titulo}")
             lines.append(f"📍 *Ciudad:* {ciudad_val}")
             lines.append(f"📅 *Fecha:* {fecha_val}{hora_txt}")
             lines.append(f"🏢 *Lugar:* {lugar_val}")
             
-            # Limpieza para que no imprima "nan" literal si el campo está vacío en el Excel
             if explicacion and explicacion.lower() != "nan" and explicacion != "":
-                lines.append(f"📝 *Explicación breve:* {explicacion}")
+                lines.append(f"📝 *Explicación breve de la actividad:* {explicacion}")
             else:
-                lines.append("📝 *Explicación breve:* Sin notas adicionales")
+                lines.append("📝 *Explicación breve de la actividad:* Sin notas adicionales")
                 
             lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
             
-            # Divisoria visual entre fichas
             if idx < total_eventos - 1:
                 lines.append(" ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ")
                 
@@ -634,15 +579,13 @@ def generar_mensaje_whatsapp(df, es_futuro=False):
 # 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
 # ==========================================
 
-# El logo se renderiza en SVG con un ancho de 180px para máxima definición
 if os.path.exists(LOGO_FILE):
     st.image(LOGO_FILE, width=180)
 else:
     st.info("Logotipo Río Negro (SVG)")
 
-st.markdown("---")  # Línea divisoria bajo el logo oficial
+st.markdown("---")
 
-# Cabecera de títulos de la app
 col_title_left, col_title_right = st.columns([4, 1.5])
 
 with col_title_left:
@@ -658,7 +601,7 @@ with col_title_right:
         st.success("¡Base de datos sincronizada!")
         st.rerun()
 
-# Pestañas condicionales según el rol del usuario (Editor / Lector)
+# Separación de pestañas condicionales según el rol del usuario
 if es_editor:
     tab1, tab2, tab3, tab4 = st.tabs([
         "🗓️ Vista de Calendario", 
@@ -674,20 +617,18 @@ else:
     tab2, tab3 = None, None
 
 # ------------------------------------------
-# TAB 1: CALENDARIO INTERACTIVO (Disponible para todos)
+# TAB 1: CALENDARIO INTERACTIVO
 # ------------------------------------------
 with tab1:
     st.header("Planificación Territorial")
     st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
     
     events = []
-    
     colores_prioridad = {
-        "ALTA": "#007BE0",       # Azul RN Oficial
-        "INTERMEDIA": "#333333", # Gris Carbón
-        "BAJA": "#6AC64F"        # Verde RN Oficial
+        "ALTA": "#007BE0",       
+        "INTERMEDIA": "#333333", 
+        "BAJA": "#6AC64F"        
     }
-    
     COLOR_CON_INVITACION = "#FF7A00" 
     
     for idx, row in st.session_state.agenda.iterrows():
@@ -771,7 +712,7 @@ with tab1:
         st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
 
 # ------------------------------------------
-# TAB 2: FORMULARIO DE CARGA DE DATOS (Solo visible para Editores)
+# TAB 2: FORMULARIO DE CARGA DE DATOS (Solo para Editores)
 # ------------------------------------------
 if es_editor and tab2 is not None:
     with tab2:
@@ -827,12 +768,11 @@ if es_editor and tab2 is not None:
                     st.rerun()
 
 # ------------------------------------------
-# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES (Solo visible para Editores)
+# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES (Solo para Editores)
 # ------------------------------------------
 if es_editor and tab3 is not None:
     with tab3:
         st.header("Editar / Cancelar Actividades")
-        
         df_agenda = st.session_state.agenda.copy()
         
         if len(df_agenda) > 0:
@@ -927,11 +867,10 @@ if es_editor and tab3 is not None:
             st.warning("No hay actividades registradas en la base de datos para editar.")
 
 # ------------------------------------------
-# TAB 4: TABLA DE DATOS, BUSCADOR Y EXPORTACIÓN (Disponible para todos)
+# TAB 4: TABLA DE DATOS, BUSCADOR Y EXPORTACIÓN
 # ------------------------------------------
 with tab4:
     st.header("Buscador y Reportes")
-    
     df_filtrado = st.session_state.agenda.copy()
     
     if len(df_filtrado) > 0:
@@ -962,46 +901,98 @@ with tab4:
         st.dataframe(df_filtrado, use_container_width=True)
         
         # ==========================================
-        # INTERFAZ DE EXPORTACIÓN Y CONFIGURACIÓN DE REPORTES
+        # CONFIGURACIÓN DEL RECONOCIMIENTO SEMANAL, RANGOS E INVITACIONES
         # ==========================================
         st.markdown("### 📤 Generar y Exportar Documentos")
         
-        col_config, col_down1, col_down2 = st.columns([2, 1.5, 1.5])
+        # Obtener lista única de semanas disponibles en el Excel para el filtro semanal
+        try:
+            semanas_disponibles = sorted([int(s) for s in df_filtrado['Semana'].dropna().unique() if str(s).strip() != "" and str(s).lower() != "nan"])
+        except:
+            semanas_disponibles = []
+            
+        col_config, col_semana_selector, col_down1, col_down2 = st.columns([2.2, 1.5, 1.3, 1.3])
         
         with col_config:
-            # Selector dinámico del alcance temporal de los archivos a descargar
             rango_reporte = st.radio(
                 "Alcance temporal de la descarga y mensajes:",
-                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante"],
-                help="Determina si los archivos y el mensaje de WhatsApp incluirán todo el historial o solo las acciones a futuro.",
+                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica"],
+                help="Determina si los archivos descargados y mensajes serán globales, cronograma de hoy en adelante, o de una semana en particular.",
                 horizontal=False
             )
-            solo_futuras = (rango_reporte == "Desde Hoy hacia adelante")
+            # NUEVO FILTRO: Checkbox dinámico de Invitaciones
+            solo_con_invitacion = st.checkbox(
+                "🔍 Filtrar SOLO actividades con 'Invitación a participar'", 
+                value=False,
+                help="Si lo activas, el Word, Excel y WhatsApp solo contendrán actividades que requieran gestión de invitaciones o protocolo."
+            )
             
-            # Procesamos de manera segura el DataFrame de descarga
-            df_descarga = df_filtrado.copy()
-            if solo_futuras:
-                hoy_date = date.today()
-                fechas_comparacion = []
-                for idx, row in df_descarga.iterrows():
-                    f_str = limpiar_fecha_para_calendario(row['Fecha'])
-                    try:
-                        fechas_comparacion.append(datetime.strptime(f_str, "%Y-%m-%d").date())
-                    except:
-                        fechas_comparacion.append(date(2000, 1, 1))
-                df_descarga['_comparar'] = fechas_comparacion
-                df_descarga = df_descarga[df_descarga['_comparar'] >= hoy_date].drop(columns=['_comparar'])
+        # Elementos dinámicos basados en la selección del radio button
+        df_descarga = df_filtrado.copy()
+        titulo_word = "REPORTE PLANIFICACION TERRITORIAL"
+        titulo_whatsapp = "Cronograma de actividades"
+        rango_aclaracion_word = "Coordinación Interinstitucional"
         
+        if rango_reporte == "Desde Hoy hacia adelante":
+            hoy_date = date.today()
+            fechas_comparacion = []
+            for idx, row in df_descarga.iterrows():
+                f_str = limpiar_fecha_para_calendario(row['Fecha'])
+                try:
+                    fechas_comparacion.append(datetime.strptime(f_str, "%Y-%m-%d").date())
+                except:
+                    fechas_comparacion.append(date(2000, 1, 1))
+            df_descarga['_comparar'] = fechas_comparacion
+            df_descarga = df_descarga[df_descarga['_comparar'] >= hoy_date].drop(columns=['_comparar'])
+            
+            titulo_word = "REPORTE PLANIFICACION TERRITORIAL"
+            titulo_whatsapp = "Cronograma de actividades"
+            rango_aclaracion_word = "Planificación desde hoy"
+            
+        elif rango_reporte == "Agenda Completa (Historial + Futuro)":
+            titulo_word = "REPORTE COMPLETO DE ACTIVIDADES TERRITORIALES"
+            titulo_whatsapp = "Agenda completa de actividades"
+            rango_aclaracion_word = "Historial completo de gestión"
+            
+        elif rango_reporte == "Filtrar por una semana específica":
+            with col_semana_selector:
+                if len(semanas_disponibles) > 0:
+                    semana_elegida = st.selectbox(
+                        "Seleccionar Semana:",
+                        semanas_disponibles,
+                        format_func=lambda x: f"Semana {x}"
+                    )
+                    df_descarga = df_descarga[df_descarga['Semana'] == semana_elegida]
+                    
+                    titulo_word = f"REPORTE PLANIFICACION TERRITORIAL - SEMANA {semana_elegida}"
+                    titulo_whatsapp = f"Planificación Territorial - Semana {semana_elegida}"
+                    rango_aclaracion_word = f"Actividades correspondientes a la Semana {semana_elegida}"
+                else:
+                    st.warning("No hay números de semana registrados en el Excel.")
+                    
+        # Aplicación del filtro estricto de Invitaciones si el usuario lo marca
+        if solo_con_invitacion:
+            # Filtramos nulos, celdas vacías o strings que solo tengan espacios
+            df_descarga = df_descarga[
+                df_descarga['Invitación a participar'].notna() & 
+                (df_descarga['Invitación a participar'].astype(str).str.strip() != "") & 
+                (df_descarga['Invitación a participar'].astype(str).str.strip().str.lower() != "nan")
+            ]
+            # Ajustamos levemente el título para reflejar el filtro en el reporte de Word
+            titulo_word += " - PROTOCOLO E INVITACIONES"
+            titulo_whatsapp += " (Con Invitaciones)"
+            rango_aclaracion_word += " | Filtrado por Protocolo/Invitaciones"
+            
         with col_down1:
-            st.write("") # Espaciador alineador
+            st.write("") 
             st.write("")
-            # Exportador a Excel seguro
+            # Generación dinámica del Excel
             output_excel = io.BytesIO()
             with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
                 df_descarga.to_excel(writer, index=False, sheet_name='Agenda')
             excel_bytes = output_excel.getvalue()
             
-            nombre_excel = "agenda_futura_territorial.xlsx" if solo_futuras else "agenda_completa_territorial.xlsx"
+            nombre_excel = "agenda_filtrada_territorial.xlsx"
             st.download_button(
                 label="📥 Descargar Excel",
                 data=excel_bytes,
@@ -1012,13 +1003,17 @@ with tab4:
             )
             
         with col_down2:
-            st.write("") # Espaciador alineador
+            st.write("") 
             st.write("")
-            # Botón de Word corregido y robustecido para descargas dinámicas
+            # Generación dinámica del Reporte Word
             if LIBRERIA_DOCX_LISTA:
                 try:
-                    word_bytes = crear_reporte_word_areas(df_filtrado, filtrar_desde_hoy=solo_futuras)
-                    nombre_word = "Reporte_Agenda_Futura_UPEU.docx" if solo_futuras else "Reporte_Agenda_Completa_UPEU.docx"
+                    word_bytes = crear_reporte_word_areas(
+                        df_descarga, 
+                        titulo_personalizado=titulo_word, 
+                        aclaracion_rango=rango_aclaracion_word
+                    )
+                    nombre_word = "Reporte_Planificacion_Territorial.docx"
                     st.download_button(
                         label="📝 Descargar Reporte Word",
                         data=word_bytes,
@@ -1033,16 +1028,15 @@ with tab4:
                 st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes.")
                 
         # ==========================================
-        # SECCIÓN DE REPORTE FORMATEADO PARA WHATSAPP (ACTUALIZADO)
+        # SECCIÓN DE REPORTE FORMATEADO PARA WHATSAPP
         # ==========================================
         st.markdown("---")
         st.markdown("### 💬 Copiar Reporte para WhatsApp")
         st.write("Copiá y pegá el siguiente mensaje estructurado con los campos oficiales requeridos:")
         
-        # Generar el mensaje basado estrictamente en el filtro, campos elegidos y alcance
-        mensaje_whatsapp_generado = generar_mensaje_whatsapp(df_descarga, es_futuro=solo_futuras)
+        # Generar el mensaje dinámico de WhatsApp basado estrictamente en el filtro y cabecera elegida
+        mensaje_whatsapp_generado = generar_mensaje_whatsapp(df_descarga, titulo_cabecera=titulo_whatsapp)
         
-        # Mostramos el bloque de texto con el botón nativo de Streamlit "Copy"
         st.code(mensaje_whatsapp_generado, language="text")
         
     else:
