@@ -3,5 +3,5 @@ pandas
 openpyxl
 streamlit-calendar
 python-docx
-gspread
 google-auth
+google-api-python-client
