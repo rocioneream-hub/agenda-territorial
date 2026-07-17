@@ -61,7 +61,17 @@ es_editor = (password == "UPEU2026")
 
 def obtener_cliente_gspread():
     alcance = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
-    credenciales_dict = st.secrets["gcp_service_account"]
+    
+    # Extraemos las credenciales guardadas en Secrets
+    credenciales_dict = dict(st.secrets["gcp_service_account"])
+    
+    # PARCHE DE SEGURIDAD ABSOLUTO PARA EVITAR EL ERROR PEM NATIVO
+    # Reemplaza barras invertidas duplicadas accidentales por saltos de línea reales de firma digital
+    pk = credenciales_dict["private_key"]
+    if "\\n" in pk:
+        pk = pk.replace("\\n", "\n")
+    credenciales_dict["private_key"] = pk
+    
     credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
     return gspread.authorize(credenciales)
 
@@ -110,23 +120,19 @@ def guardar_todo_en_sheets(df):
         return False
 
 def limpiar_fecha_para_calendario(val):
-    """Normaliza de forma ultra robusta las fechas fijas y los formatos flexibles 'Sin especificar (Mes Año)'."""
     val_str = str(val).strip()
     if not val_str or val_str == "nan" or val_str == "": 
         return None
         
-    # 1. Detectar si es formato ISO estándar (YYYY-MM-DD)
     match_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", val_str)
     if match_iso: 
         return match_iso.group(1)
         
-    # 2. Detectar y decodificar el formato flexible: "Sin especificar (Mes Año)"
     if "sin especificar" in val_str.lower():
         meses_dict = {
             "enero": 1, "febrero": 2, "marzo": 3, "abril": 4, "mayo": 5, "junio": 6,
             "julio": 7, "agosto": 8, "septiembre": 9, "octubre": 10, "noviembre": 11, "diciembre": 12
         }
-        # Buscamos el nombre del mes dentro de la cadena
         anio_detectado = date.today().year
         match_anio = re.search(r"\b(202\d)\b", val_str)
         if match_anio:
@@ -134,11 +140,9 @@ def limpiar_fecha_para_calendario(val):
             
         for mes_nombre, mes_num in meses_dict.items():
             if mes_nombre in val_str.lower():
-                # Retorna de forma segura el día 1 de ese mes para situarlo en el calendario
                 return f"{anio_detectado}-{str(mes_num).zfill(2)}-01"
-        return f"{anio_detectado}-01-01" # Por defecto primer día del año si no encuentra el mes
+        return f"{anio_detectado}-01-01"
 
-    # 3. Formato tradicional DD/MM/YYYY o DD-MM-YYYY
     val_str = re.sub(r"\s*/\s*", "/", val_str)
     match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", val_str)
     if match_normal: 
@@ -242,7 +246,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         
     lines = ["🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*", f"📅 *{titulo_cabecera}*:", "─────────────────────"]
     total_eventos = len(df_procesar)
-    if total_eventos == 0:
+    if total_eventEventos == 0:
         lines.append("*(Sin actividades planificadas)*")
     else:
         for idx, row in df_procesar.iterrows():
@@ -289,7 +293,7 @@ else:
     tab2, tab3 = None, None
 
 # ------------------------------------------
-# TAB 1: CALENDARIO INTERACTIVO CORREGIDO
+# TAB 1: CALENDARIO INTERACTIVO
 # ------------------------------------------
 with tab1:
     st.header("Planificación Territorial")
@@ -299,14 +303,12 @@ with tab1:
     if len(st.session_state.agenda) > 0:
         for idx, row in st.session_state.agenda.iterrows():
             fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
-            # Al normalizar mediante la nueva función, ya ninguna fila quedará excluida por problemas de formato
             if fecha_limpia:
                 invitacion_val = str(row.get('Invitación a participar', '')).strip()
                 tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
                 
                 act_txt = str(row['Actividad'])
-                if "sin especificar" in str(row['Fecha']).lower(): 
-                    act_txt = f"📍 [FECHA FLEXIBLE] {act_txt}"
+                if "sin especificar" in str(row['Fecha']).lower(): act_txt = f"📍 [FECHA FLEXIBLE] {act_txt}"
                     
                 color_evento = "#FF7A00" if tiene_invitacion else colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
                 events.append({
@@ -332,10 +334,10 @@ with tab1:
             st.write(f"**📝 Explicación:** {props.get('explicacion')}")
             st.write(f"**✉️ Invitación:** `{props.get('invitacion')}`")
     else:
-        st.warning("No hay actividades cargadas en Google Sheets o las fechas no pudieron procesarse.")
+        st.warning("No hay actividades con fechas válidas para renderizar el calendario.")
 
 # ------------------------------------------
-# TAB 2: CARGA RÁPIDA (ESCRITURA DIRECTA)
+# TAB 2: CARGA RÁPIDA
 # ------------------------------------------
 if es_editor and tab2 is not None:
     with tab2:
