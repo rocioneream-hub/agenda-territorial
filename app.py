@@ -60,16 +60,22 @@ es_editor = (password == "UPEU2026")
 # ==========================================
 
 def obtener_cliente_gspread():
-    """Genera la conexión limpiando de raíz la clave privada para evitar el error PEM al leer y escribir."""
+    """Genera la conexión normalizando la firma PEM con doble filtro de reemplazo."""
     alcance = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
-    # Clonamos de manera segura las credenciales en un diccionario común de Python
-    credenciales_dict = dict(st.secrets["gcp_service_account"])
+    # Clonamos de manera limpia las credenciales de los Secrets
+    credenciales_dict = {}
+    for k, v in st.secrets["gcp_service_account"].items():
+        credenciales_dict[k] = v
+        
+    # DOBLE FILTRO ANTI-MUTACIÓN DE STREAMLIT CLOUD
+    pk = str(credenciales_dict.get("private_key", "")).strip()
     
-    # Reemplazo dinámico de barras de escape por saltos de línea reales de firma PEM
-    pk = str(credenciales_dict.get("private_key", ""))
-    if "\\n" in pk:
-        pk = pk.replace("\\n", "\n")
+    # Caso 1: Corregir barras duplicadas que mete Streamlit Cloud en el guardado
+    pk = pk.replace("\\\\n", "\n")
+    # Caso 2: Corregir barras simples literales de escape
+    pk = pk.replace("\\n", "\n")
+    
     credenciales_dict["private_key"] = pk
     
     credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
