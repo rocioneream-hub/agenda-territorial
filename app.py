@@ -225,7 +225,7 @@ def limpiar_fecha_para_calendario(val):
     val_str = re.sub(r"\s*/\s*", "/", val_str)
         
     # 2. Formato rango "17 y 18/07/2026"
-    match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{4})", val_str)
+    match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{3,4})", val_str)
     if match_rango:
         dia = match_rango.group(1).zfill(2)
         mes = match_rango.group(2).zfill(2)
@@ -233,7 +233,7 @@ def limpiar_fecha_para_calendario(val):
         return f"{anio}-{mes}-{dia}"
         
     # 3. Formato DD/MM/YYYY normal
-    match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{4})", val_str)
+    match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{3,4})", val_str)
     if match_normal:
         dia = match_normal.group(1).zfill(2)
         mes = match_normal.group(2).zfill(2)
@@ -241,6 +241,23 @@ def limpiar_fecha_para_calendario(val):
         return f"{anio}-{mes}-{dia}"
         
     return None
+
+def obtener_mes_nombre(val_fecha):
+    """Auxiliar para agrupar reportes de forma humana por mes en español."""
+    meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+    f_limpia = limpiar_fecha_para_calendario(val_fecha)
+    if f_limpia:
+        try:
+            num_mes = int(f_limpia.split("-")[1])
+            return meses_es[num_mes]
+        except:
+            pass
+    
+    # Si viene con etiqueta explícita de "Sin especificar (Mes Año)"
+    for m in meses_es:
+        if m and m.lower() in str(val_fecha).lower():
+            return m
+    return "Fecha Flexible / Por definir"
 
 def load_data():
     """Carga el Excel, normaliza nombres de columnas, elimina filas fantasma y limpia nulos."""
@@ -460,14 +477,12 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
             if "00:00:00" in fecha_val:
                 fecha_val = fecha_val.split(" ")[0]
             
-            # Si el Excel contiene la aclaración o la fecha apunta al primero de mes como "Sin especificar"
             if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
                 fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
             else:
                 fecha_mostrar = fecha_val
                 
             hora_val = str(row.get('Hora', 'Sin especificar')).strip()
-            # Si la hora está vacía o es por defecto pero se guardó como sin especificar
             if hora_val.lower() == "nan" or hora_val == "" or "sin especificar" in hora_val.lower():
                 hora_text = " - Sin especificar"
             else:
@@ -528,7 +543,7 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
     return buffer.getvalue()
 
 # ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CORREGIDA Y CON NUEVO SEPARADOR)
+# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (SEPARADOR ACTUALIZADO)
 # ==========================================
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
@@ -591,9 +606,9 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
                 
             lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
             
-            # SEPARADOR DE WHATSAPP MEJORADO (Minimalista, limpio y no se corta en celulares)
+            # NUEVO SEPARADOR DE WHATSAPP SOLICITADO
             if idx < total_eventos - 1:
-                lines.append("\n🔸  🔸  🔸  🔸  🔸\n")
+                lines.append("\n❇️🔹❇️🔹❇️\n")
                 
     lines.append("─────────────────────")
     
@@ -752,14 +767,12 @@ if es_editor and tab2 is not None:
             col1, col2 = st.columns(2)
             
             with col1:
-                # Opciones dinámicas de flexibilización de Fechas
                 st.markdown("**📅 Fecha del Evento**")
                 fecha_sin_especificar = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=False)
                 mes_propuesto = st.selectbox("Mes de referencia:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
                 anio_propuesto = st.selectbox("Año:", [2026, 2027])
                 f_fecha = st.date_input("Elegir fecha fija (Si la casilla anterior está desmarcada)", datetime.today())
                 
-                # Opciones dinámicas de flexibilización de Hora
                 st.markdown("**⏰ Horario del Evento**")
                 hora_sin_especificar = st.checkbox("Dejar hora sin especificar (A coordinar)", value=False)
                 f_hora = st.time_input("Hora fija (Si la casilla anterior está desmarcada)", value=time(9, 0)) 
@@ -783,18 +796,15 @@ if es_editor and tab2 is not None:
                 if not f_actividad or not f_ciudad:
                     st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
                 else:
-                    # Lógica de construcción para Fecha Flexible
                     if fecha_sin_especificar:
                         meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
                         mes_num = meses_dict[mes_propuesto]
-                        # Se coloca automáticamente como el primer día del mes seleccionado
                         fecha_guardar = f"Sin especificar ({mes_propuesto} {anio_propuesto})"
                         fecha_tecnica = date(anio_propuesto, mes_num, 1)
                     else:
                         fecha_guardar = str(f_fecha)
                         fecha_tecnica = f_fecha
                         
-                    # Lógica de construcción para Hora Flexible
                     hora_guardar = "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M")
                     
                     nueva_actividad = {
@@ -842,7 +852,7 @@ if es_editor and tab3 is not None:
                 
                 st.info(f"Modificando el registro de la fila {idx_seleccionado}")
                 
-                with st.form("form_edicion"):
+                with St.form("form_edicion"):
                     col1_ed, col2_ed = st.columns(2)
                     
                     with col1_ed:
@@ -944,13 +954,13 @@ with tab4:
         with col_f2:
             ciudades_unicas = sorted(list(df_filtrado['Ciudad'].astype(str).str.strip().unique()))
             list_ciudades = ["Todas"] + [c for c in ciudades_unicas if c != 'nan' and c != '']
-            filtro_ciudad = st.selectbox("Filtrar por Ciudad", list_ciudades, key="filter_loc_tab4")
+            filto_ciudad = st.selectbox("Filtrar por Ciudad", list_ciudades, key="filter_loc_tab4")
             
-        # Filtrar por Ciudad
-        if filtro_ciudad != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Ciudad'].str.strip() == filtro_ciudad]
+        # Filtrar por Ciudad en la vista de pantalla
+        if filto_ciudad != "Todas":
+            df_filtrado = df_filtrado[df_filtrado['Ciudad'].str.strip() == filto_ciudad]
             
-        # Filtrar palabra clave
+        # Filtrar palabra clave en la vista de pantalla
         if search_query:
             df_filtrado = df_filtrado[
                 df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
@@ -965,7 +975,7 @@ with tab4:
         st.dataframe(df_filtrado, use_container_width=True)
         
         # ==========================================
-        # CONFIGURACIÓN DEL RECONOCIMIENTO SEMANAL, RANGOS E INVITACIONES
+        # CONFIGURACIÓN DEL FILTRADO DE DESCARGA (CON NUEVO FILTRO MENSUAL)
         # ==========================================
         st.markdown("### 📤 Generar y Exportar Documentos")
         
@@ -974,13 +984,21 @@ with tab4:
         except:
             semanas_disponibles = []
             
-        col_config, col_semana_selector, col_down1, col_down2 = st.columns([2.2, 1.5, 1.3, 1.3])
+        # Obtener los nombres de meses mapeados para el filtro dinámico
+        df_filtrado['_temp_mes'] = df_filtrado['Fecha'].apply(obtener_mes_nombre)
+        meses_disponibles = [m for m in ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] if m in df_filtrado['_temp_mes'].unique()]
+        # Agregar "Fecha Flexible / Por definir" al final si existe en el DataFrame
+        if "Fecha Flexible / Por definir" in df_filtrado['_temp_mes'].unique():
+            meses_disponibles.append("Fecha Flexible / Por definir")
+        df_filtrado = df_filtrado.drop(columns=['_temp_mes'])
+            
+        col_config, col_selectores, col_down1, col_down2 = st.columns([2.2, 1.5, 1.3, 1.3])
         
         with col_config:
             rango_reporte = st.radio(
                 "Alcance temporal de la descarga:",
-                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica"],
-                help="Determina si los archivos descargados y mensajes serán globales, cronograma de hoy en adelante, o de una semana en particular.",
+                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica", "Filtrar por un mes específico"],
+                help="Determina si los archivos descargados y mensajes serán globales, por rango cronológico, de una semana o de un mes específico.",
                 horizontal=False
             )
             solo_con_invitacion = st.checkbox(
@@ -994,6 +1012,7 @@ with tab4:
         titulo_whatsapp = "Cronograma de actividades"
         rango_aclaracion_word = "Coordinación Interinstitucional"
         
+        # Procesamiento de Filtros Temporales de Descarga
         if rango_reporte == "Desde Hoy hacia adelante":
             hoy_date = date.today()
             fechas_comparacion = []
@@ -1016,7 +1035,7 @@ with tab4:
             rango_aclaracion_word = "Historial completo de gestión"
             
         elif rango_reporte == "Filtrar por una semana específica":
-            with col_semana_selector:
+            with col_selectores:
                 if len(semanas_disponibles) > 0:
                     semana_elegida = st.selectbox(
                         "Seleccionar Semana:",
@@ -1030,6 +1049,23 @@ with tab4:
                     rango_aclaracion_word = f"Actividades correspondientes a la Semana {semana_elegida}"
                 else:
                     st.warning("No hay números de semana registrados en el Excel.")
+                    
+        elif rango_reporte == "Filtrar por un mes específico":
+            with col_selectores:
+                if len(meses_disponibles) > 0:
+                    mes_elegido = st.selectbox(
+                        "Seleccionar Mes:",
+                        meses_disponibles
+                    )
+                    # Filtramos el DataFrame calculando el mes humano correspondiente
+                    df_descarga['_mes_calculado'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
+                    df_descarga = df_descarga[df_descarga['_mes_calculado'] == mes_elegido].drop(columns=['_mes_calculado'])
+                    
+                    titulo_word = f"REPORTE PLANIFICACION TERRITORIAL - {mes_elegido.upper()}"
+                    titulo_whatsapp = f"Planificación Territorial - Mes de {mes_elegido}"
+                    rango_aclaracion_word = f"Planificación correspondiente al período de {mes_elegido}"
+                else:
+                    st.warning("No se detectan registros ordenados por meses válidos.")
                     
         # Aplicación del filtro estricto de Invitaciones
         if solo_con_invitacion:
