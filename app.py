@@ -5,6 +5,8 @@ from datetime import datetime, time, date
 import re
 import os
 import io
+import requests
+import base64
 
 # Importación segura de la librería python-docx
 try:
@@ -189,7 +191,6 @@ st.markdown("""
     </style>
 """, unsafe_allow_html=True)
 
-EXCEL_FILE = "agenda_territorial_consolidada.xlsx"
 LOGO_FILE = "isologo_RN.svg"
 
 # ==========================================
@@ -198,9 +199,7 @@ LOGO_FILE = "isologo_RN.svg"
 st.sidebar.header("🔑 Control de Acceso")
 password = st.sidebar.text_input("Contraseña de Editor", type="password")
 
-# Contraseña de seguridad para la edición
 CONTRASEÑA_CORRECTA = "UPEU2026" 
-
 es_editor = (password == CONTRASEÑA_CORRECTA)
 
 if es_editor:
@@ -209,119 +208,141 @@ else:
     st.sidebar.info("👁️ Modo Visualización (Solo Lectura)")
 
 # ==========================================
-# 3. FUNCIONES DE LIMPIEZA Y CARGA DE DATOS
+# 3. FUNCIONES DE PERSISTENCIA DIRECTA CON GITHUB API
 # ==========================================
+
+def github_request(method, payload=None):
+    token = st.secrets.get("GITHUB_TOKEN")
+    repo = st.secrets.get("GITHUB_REPO")
+    path = st.secrets.get("GITHUB_FILE_PATH", "agenda_territorial_consolidada.xlsx")
+    
+    if not token or not repo:
+        return None, "Faltan configurar las credenciales de GitHub en los Secrets de Streamlit."
+        
+    url = f"https://api.github.com/repos/{repo}/contents/{path}"
+    headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github.v3+json"
+    }
+    
+    if method == "GET":
+        response = requests.get(url, headers=headers)
+        if response.status_code == 200:
+            return response.json(), None
+        return None, f"Error al descargar archivo de GitHub (Status: {response.status_code})"
+        
+    elif method == "PUT" and payload:
+        response = requests.put(url, headers=headers, json=payload)
+        if response.status_code in [200, 201]:
+            return response.json(), None
+        return None, f"Error al guardar cambios en GitHub: {response.text}"
+        
+    return None, "Método inválido"
 
 def limpiar_fecha_para_calendario(val):
     val_str = str(val).strip()
     if not val_str or val_str == "nan" or val_str == "":
         return None
-    
-    # 1. Formato estándar YYYY-MM-DD
     match_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", val_str)
     if match_iso:
         return match_iso.group(1)
-        
     val_str = re.sub(r"\s*/\s*", "/", val_str)
-        
-    # 2. Formato rango "17 y 18/07/2026"
     match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{3,4})", val_str)
     if match_rango:
-        dia = match_rango.group(1).zfill(2)
-        mes = match_rango.group(2).zfill(2)
-        anio = match_rango.group(3)
-        return f"{anio}-{mes}-{dia}"
-        
-    # 3. Formato DD/MM/YYYY normal
+        return f"{match_rango.group(3)}-{match_rango.group(2).zfill(2)}-{match_rango.group(1).zfill(2)}"
     match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{3,4})", val_str)
     if match_normal:
-        dia = match_normal.group(1).zfill(2)
-        mes = match_normal.group(2).zfill(2)
-        anio = match_normal.group(3)
-        return f"{anio}-{mes}-{dia}"
-        
+        return f"{match_normal.group(3)}-{match_normal.group(2).zfill(2)}-{match_normal.group(1).zfill(2)}"
     return None
 
 def obtener_mes_nombre(val_fecha):
-    """Auxiliar para agrupar reportes de forma humana por mes en español."""
     meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
     f_limpia = limpiar_fecha_para_calendario(val_fecha)
     if f_limpia:
         try:
-            num_mes = int(f_limpia.split("-")[1])
-            return meses_es[num_mes]
+            return meses_es[int(f_limpia.split("-")[1])]
         except:
             pass
-    
-    # Si viene con etiqueta explícita de "Sin especificar (Mes Año)"
     for m in meses_es:
         if m and m.lower() in str(val_fecha).lower():
             return m
     return "Fecha Flexible / Por definir"
 
 def load_data():
-    """Carga el Excel, normaliza nombres de columnas, elimina filas fantasma y limpia nulos."""
-    try:
-        df = pd.read_excel(EXCEL_FILE)
+    file_info, error = github_request("GET")
+    columnas_requeridas = [
+        'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
+        'Explicación breve de la actividad', 'Cantidad de personas estimadas',
+        'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
+    ]
+    
+    if error or not file_info:
+        path_local = st.secrets.get("GITHUB_FILE_PATH", "agenda_territorial_consolidada.xlsx")
+        if os.path.exists(path_local):
+            df = pd.read_excel(path_local)
+        else:
+            return pd.DataFrame(columns=columnas_requeridas)
+    else:
+        conte_bytes = base64.b64decode(file_info["content"])
+        df = pd.read_excel(io.BytesIO(conte_bytes))
         
-        # Normalizar los nombres de las columnas para quitar espacios accidentales
-        df.columns = df.columns.str.strip()
-        
-        # --- ELIMINACIÓN DE FILAS FANTASMA ---
-        df['_temp_fecha'] = df['Fecha'].astype(str).str.strip().replace('', None)
-        df['_temp_actividad'] = df['Actividad'].astype(str).str.strip().replace('', None)
-        
-        df = df[
-            (~df['_temp_fecha'].isna() & (df['_temp_fecha'] != 'nan') & (df['_temp_fecha'] != '')) |
-            (~df['_temp_actividad'].isna() & (df['_temp_actividad'] != 'nan') & (df['_temp_actividad'] != ''))
-        ]
-        df = df.drop(columns=['_temp_fecha', '_temp_actividad'])
+    df.columns = df.columns.str.strip()
+    
+    df['_temp_f'] = df['Fecha'].astype(str).str.strip().replace('', None)
+    df['_temp_a'] = df['Actividad'].astype(str).str.strip().replace('', None)
+    df = df[(~df['_temp_f'].isna() & (df['_temp_f'] != 'nan')) | (~df['_temp_a'].isna() & (df['_temp_a'] != 'nan'))]
+    df = df.drop(columns=['_temp_f', '_temp_a'])
 
-        # Asegurar que existan todas las columnas requeridas
-        columnas_requeridas = [
-            'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
-            'Explicación breve de la actividad', 'Cantidad de personas estimadas',
-            'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
-        ]
-        for col in columnas_requeridas:
-            if col not in df.columns:
-                df[col] = ""
-                
-        df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
-        df['Hora'] = df['Hora'].fillna("Sin especificar").astype(str).str.strip()
-        df['Ciudad'] = df['Ciudad'].fillna("Sin Ciudad").astype(str).str.strip()
-        df['Lugar'] = df['Lugar'].fillna("Sin especificar").astype(str).str.strip()
-        df['Explicación breve de la actividad'] = df['Explicación breve de la actividad'].fillna("").astype(str)
-        
-        # Validación segura de asistencia estimada
-        df['Cantidad de personas estimadas'] = pd.to_numeric(df['Cantidad de personas estimadas'], errors='coerce').fillna(0).astype(int)
-        
-        df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
-        df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
-        df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
-        df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
-        df['Invitación a participar'] = df['Invitación a participar'].fillna("").astype(str)
-        
-        return df.reset_index(drop=True)
-        
-    except Exception as e:
-        st.error(f"Error al cargar la base de datos: {e}")
-        return pd.DataFrame(columns=[
-            'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
-            'Explicación breve de la actividad', 'Cantidad de personas estimadas',
-            'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
-        ])
+    for col in columnas_requeridas:
+        if col not in df.columns:
+            df[col] = ""
+            
+    df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
+    df['Hora'] = df['Hora'].fillna("Sin especificar").astype(str).str.strip()
+    df['Ciudad'] = df['Ciudad'].fillna("Sin Ciudad").astype(str).str.strip()
+    df['Lugar'] = df['Lugar'].fillna("Sin especificar").astype(str).str.strip()
+    df['Explicación breve de la actividad'] = df['Explicación breve de la actividad'].fillna("").astype(str)
+    df['Cantidad de personas estimadas'] = pd.to_numeric(df['Cantidad de personas estimadas'], errors='coerce').fillna(0).astype(int)
+    df['Organismo/Actor'] = df['Organismo/Actor'].fillna("No especificado").astype(str)
+    df['Estado'] = df['Estado'].fillna("Pendiente").astype(str)
+    df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
+    df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
+    df['Invitación a participar'] = df['Invitación a participar'].fillna("").astype(str)
+    
+    return df.reset_index(drop=True)
 
-# Inicializar o forzar la carga de la agenda
+def push_data_to_github(df, commit_message="Actualización desde el panel de control territorial"):
+    file_info, error = github_request("GET")
+    if error or not file_info:
+        st.error(f"No se pudo sincronizar el estado previo en GitHub: {error}")
+        return False
+        
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False)
+    excel_bytes = output.getvalue()
+    content_b64 = base64.b64encode(excel_bytes).decode("utf-8")
+    
+    payload = {
+        "message": commit_message,
+        "content": content_b64,
+        "sha": file_info["sha"]
+    }
+    
+    _, put_error = github_request("PUT", payload=payload)
+    if put_error:
+        st.error(put_error)
+        return False
+    return True
+
 if 'agenda' not in st.session_state:
     st.session_state.agenda = load_data()
 
 # ==========================================
-# FUNCIONES AUXILIARES DE EXPORTACIÓN A WORD (CON FILTROS DE SEGURIDAD EXTREMOS)
+# EXPORTACIÓN A WORD Y WHATSAPP
 # ==========================================
 
 def set_cell_background(cell, color_hex):
-    """Establece de manera segura el color de fondo de una celda en una tabla de Word."""
     try:
         shading_xml = f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
         cell._tc.get_or_add_tcPr().append(parse_xml(shading_xml))
@@ -329,10 +350,7 @@ def set_cell_background(cell, color_hex):
         pass
 
 def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TERRITORIAL", aclaracion_rango=""):
-    """Genera un reporte DOCX formal respetando exactamente los títulos y alcances seleccionados."""
     doc = docx.Document()
-    
-    # Configuración de márgenes estándar
     try:
         for section in doc.sections:
             section.top_margin = Inches(1)
@@ -341,31 +359,22 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
             section.right_margin = Inches(1)
     except:
         pass
-        
     style = doc.styles['Normal']
-    font = style.font
-    font.name = 'Calibri'
-    font.size = Pt(11)
+    style.font.name = 'Calibri'
+    style.font.size = Pt(11)
     
-    # MEMBRETADO INSTITUCIONAL
     p_header = doc.add_paragraph()
-    p_header.alignment = WD_ALIGN_PARAGRAPH.LEFT
     run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n")
     run_gob.font.bold = True
     run_gob.font.size = Pt(10)
-    try:
-        run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN (#6AC64F)
-    except:
-        pass
+    try: run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79)
+    except: pass
     
     run_sub = p_header.add_run("Ministerio de Educación y Derechos Humanos\nUnidad Provincial de Enlace con Universidades (UPEU)\n")
     run_sub.font.size = Pt(9.5)
-    try:
-        run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
-    except:
-        pass
+    try: run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
+    except: pass
     
-    # Línea divisoria decorativa
     try:
         p_line = doc.add_paragraph()
         p_line_border = OxmlElement('w:pBdr')
@@ -373,69 +382,48 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
         bottom_border.set(qn('w:val'), 'single')
         bottom_border.set(qn('w:sz'), '8')
         bottom_border.set(qn('w:space'), '1')
-        bottom_border.set(qn('w:color'), '007BE0') # Azul RN
+        bottom_border.set(qn('w:color'), '007BE0')
         p_line_border.append(bottom_border)
         p_line._p.get_or_add_pPr().append(p_line_border)
-    except:
-        pass
+    except: pass
     
-    # TÍTULO PRINCIPAL
     p_title = doc.add_paragraph()
-    p_title.alignment = WD_ALIGN_PARAGRAPH.LEFT
     run_title = p_title.add_run(titulo_personalizado.upper())
     run_title.font.bold = True
     run_title.font.size = Pt(15)
-    try:
-        run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224) # Azul RN
-    except:
-        pass
-    p_title.paragraph_format.space_after = Pt(2)
+    try: run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+    except: pass
     
     p_date = doc.add_paragraph()
-    p_date.alignment = WD_ALIGN_PARAGRAPH.LEFT
-    
     aclaracion_texto = aclaracion_rango if aclaracion_rango else "Coordinación de Planificación"
     run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {aclaracion_texto}")
     run_date.font.italic = True
     run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
-    # CUADRO RESUMEN DE ASISTENCIA GLOBAL
     total_acciones = len(df)
-    try:
-        total_personas = df['Cantidad de personas estimadas'].fillna(0).astype(int).sum()
-    except:
-        total_personas = 0
+    total_personas = df['Cantidad de personas estimadas'].sum() if total_acciones > 0 else 0
     
     table_resumen = doc.add_table(rows=2, cols=2)
     hdr_res = table_resumen.rows[0].cells
     hdr_res[0].text = "Acciones en el Reporte"
     hdr_res[1].text = "Proyección de Asistentes Global"
-    
     for cell in hdr_res:
         set_cell_background(cell, "F5F5F5")
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.runs[0].font.bold = True
-        p.runs[0].font.size = Pt(10)
         
     row_res = table_resumen.rows[1].cells
     row_res[0].text = str(total_acciones)
     row_res[1].text = f"{total_personas:,} personas"
-    
     for cell in row_res:
         p = cell.paragraphs[0]
         p.alignment = WD_ALIGN_PARAGRAPH.CENTER
         p.runs[0].font.bold = True
-        p.runs[0].font.size = Pt(12)
-        try:
-            p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
-        except:
-            pass
+        try: p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+        except: pass
         
-    doc.add_paragraph().paragraph_format.space_after = Pt(12)
-    
-    # DESGLOSE DE LAS ACTIVIDADES
     doc.add_heading("Fichas de Planificación de Actividades", level=2)
     
     if total_acciones > 0:
@@ -443,190 +431,118 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
         try:
             df_ordenado['Fecha_Limpia'] = df_ordenado['Fecha'].apply(limpiar_fecha_para_calendario)
             df_ordenado = df_ordenado.sort_values(by='Fecha_Limpia').reset_index(drop=True)
-        except:
-            pass
+        except: pass
         
         for idx, row in df_ordenado.iterrows():
             p_act = doc.add_paragraph()
             p_act.paragraph_format.space_before = Pt(14)
-            p_act.paragraph_format.space_after = Pt(4)
-            
             act_titulo = str(row.get('Actividad', 'Sin Nombre'))
             run_header = p_act.add_run(f"📌 Actividad {idx+1}: {act_titulo}")
             run_header.font.bold = True
-            run_header.font.size = Pt(11)
-            try:
-                run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
-            except:
-                pass
+            try: run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
+            except: pass
             
-            # Tabla de Ficha Técnica Individual (Los 6 campos clave)
             ficha_table = doc.add_table(rows=6, cols=2)
             ficha_table.style = 'Light Shading Accent 1'
-            
-            # Campo 1: Actividad
             ficha_table.rows[0].cells[0].text = "Actividad:"
             ficha_table.rows[0].cells[1].text = act_titulo
-            
-            # Campo 2: Ciudad
             ficha_table.rows[1].cells[0].text = "Ciudad:"
             ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
             
-            # Campo 3: Fecha (Manejo inteligente de "Sin especificar" / primer día de cada mes)
-            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
-            if "00:00:00" in fecha_val:
-                fecha_val = fecha_val.split(" ")[0]
-            
-            if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
-                fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
-            else:
-                fecha_mostrar = fecha_val
-                
+            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip().split(" ")[0]
+            fecha_mostrar = "Sin especificar (A coordinar por el territorio)" if "sin" in fecha_val.lower() or fecha_val == "" else fecha_val
             hora_val = str(row.get('Hora', 'Sin especificar')).strip()
-            if hora_val.lower() == "nan" or hora_val == "" or "sin especificar" in hora_val.lower():
-                hora_text = " - Sin especificar"
-            else:
-                hora_text = f" - {hora_val} hs"
+            hora_text = " - Sin especificar" if "sin" in hora_val.lower() or hora_val == "" else f" - {hora_val} hs"
                 
             ficha_table.rows[2].cells[0].text = "Fecha:"
             ficha_table.rows[2].cells[1].text = f"{fecha_mostrar}{hora_text}"
-            
-            # Campo 4: Lugar
             ficha_table.rows[3].cells[0].text = "Lugar:"
             ficha_table.rows[3].cells[1].text = str(row.get('Lugar', 'Sin especificar'))
-            
-            # Campo 5: Explicación breve de la actividad
-            exp_val = str(row.get('Explicación breve de la actividad', row.get('Descripción', 'Sin notas adicionales')))
             ficha_table.rows[4].cells[0].text = "Explicación breve de la actividad:"
-            ficha_table.rows[4].cells[1].text = exp_val
-            
-            # Campo 6: Cantidad de personas estimadas
-            try:
-                asistencia_num = int(row.get('Cantidad de personas estimadas', 0))
-            except:
-                asistencia_num = 0
+            ficha_table.rows[4].cells[1].text = str(row.get('Explicación breve de la actividad', 'Sin notas adicionales'))
             ficha_table.rows[5].cells[0].text = "Cantidad de personas estimadas:"
-            ficha_table.rows[5].cells[1].text = f"{asistencia_num:,} asistentes"
+            ficha_table.rows[5].cells[1].text = f"{int(row.get('Cantidad de personas estimadas', 0)):,} asistentes"
             
-            # Formatear estilos de celdas
             for r_idx, r in enumerate(ficha_table.rows):
                 try:
                     r.cells[0].paragraphs[0].runs[0].font.bold = True
-                    r.cells[0].paragraphs[0].runs[0].font.size = Pt(9.5)
-                    r.cells[1].paragraphs[0].runs[0].font.size = Pt(9.5)
                     if r_idx == 5:
                         r.cells[1].paragraphs[0].runs[0].font.bold = True
-                        r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
-                except:
-                    pass
-            
-            doc.add_paragraph().paragraph_format.space_after = Pt(6)
+                        r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79)
+                except: pass
     else:
-        doc.add_paragraph(f"No se registran actividades para los criterios de búsqueda actuales.")
+        doc.add_paragraph("No se registran actividades para los criterios de búsqueda actuales.")
         
-    # PIE DE PÁGINA CON EL HASHTAG DE GESTIÓN
     p_footer = doc.add_paragraph()
     p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    p_footer.paragraph_format.space_before = Pt(30)
     run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos")
     run_hashtag.font.bold = True
-    run_hashtag.font.size = Pt(11)
-    try:
-        run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79) # Verde RN
-    except:
-        pass
+    try: run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79)
+    except: pass
     
-    # Guardar documento en buffer de memoria
     buffer = io.BytesIO()
     doc.save(buffer)
     buffer.seek(0)
     return buffer.getvalue()
 
-# ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CON NUEVA VARIABLE "ORGANISMO/ACTOR" TRADUCIDA)
-# ==========================================
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
     
-    try:
-        df_procesar['Fecha_Limpia'] = df_procesar['Fecha'].apply(limpiar_fecha_para_calendario)
-        df_procesar = df_procesar.sort_values(by='Fecha_Limpia').reset_index(drop=True)
-    except:
-        pass
-        
-    lines = []
-    lines.append("🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*")
-    lines.append(f"📅 *{titulo_cabecera}*:")
-    lines.append("─────────────────────")
+    # Clasificación y ordenamiento de registros
+    flexibles = []
+    cronologicos = []
     
-    total_eventos = len(df_procesar)
+    for idx, row in df_procesar.iterrows():
+        fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
+        if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
+            flexibles.append(row)
+        else:
+            # Adjuntamos la fecha técnica de ordenamiento de forma segura
+            row_copy = row.copy()
+            row_copy['_fecha_orden'] = limpiar_fecha_para_calendario(fecha_val) or "9999-12-31"
+            cronologicos.append(row_copy)
+            
+    # Ordenar cronológicos por su fecha limpia
+    if cronologicos:
+        df_cron = pd.DataFrame(cronologicos).sort_values(by='_fecha_orden').reset_index(drop=True)
+        cronologicos = [row for _, row in df_cron.iterrows()]
+        
+    # Consolidar lista de salida (flexibles primero)
+    lista_final = flexibles + cronologicos
+    total_eventos = len(lista_final)
+    
+    lines = ["🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*", f"📅 *{titulo_cabecera}*:", "─────"]
+    
     if total_eventos == 0:
         lines.append("*(Sin actividades planificadas para el rango seleccionado)*")
     else:
-        for idx, row in df_procesar.iterrows():
-            act_titulo = str(row.get('Actividad', 'Sin Nombre')).upper().strip()
-            
-            # Tratamiento inteligente de fecha flexible
-            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
-            if "00:00:00" in fecha_val:
-                fecha_val = fecha_val.split(" ")[0]
-                
-            if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
-                fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
-            else:
-                fecha_mostrar = fecha_val
-                
-            # Tratamiento de hora flexible
+        for idx, row in enumerate(lista_final):
+            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip().split(" ")[0]
+            fecha_mostrar = "Sin especificar (A coordinar por el territorio)" if "sin" in fecha_val.lower() or fecha_val == "" else fecha_val
             hora_val = str(row.get('Hora', 'Sin especificar')).strip()
-            if hora_val.lower() == "nan" or hora_val == "" or "sin especificar" in hora_val.lower():
-                hora_txt = " - Horario sin especificar"
-            else:
-                hora_txt = f" - {hora_val} hs"
+            hora_txt = " - Horario sin especificar" if "sin" in hora_val.lower() or hora_val == "" else f" - {hora_val} hs"
+            asistencia = int(row.get('Cantidad de personas estimadas', 0))
             
-            ciudad_val = str(row.get('Ciudad', 'Sin especificar')).strip()
-            lugar_val = str(row.get('Lugar', 'Sin especificar')).strip()
-            organismo_val = str(row.get('Organismo/Actor', 'No especificado')).strip()
-            explicacion = str(row.get('Explicación breve de la actividad', row.get('Descripción', ''))).strip()
-            
-            try:
-                asistencia = int(row.get('Cantidad de personas estimadas', 0))
-                asistencia_txt = f"{asistencia:,} personas estimadas" if asistencia > 0 else "Sin especificar"
-            except:
-                asistencia_txt = "Sin especificar"
-                
-            # Renderizado de los campos oficiales requeridos
-            lines.append(f"📌 *Actividad {idx+1}:* {act_titulo}")
-            lines.append(f"📍 *Ciudad:* {ciudad_val}")
+            lines.append(f"📌 *Actividad {idx+1}:* {str(row.get('Actividad', 'Sin Nombre')).upper().strip()}")
+            lines.append(f"📍 *Ciudad:* {str(row.get('Ciudad', 'Sin especificar')).strip()}")
             lines.append(f"📅 *Fecha:* {fecha_mostrar}{hora_txt}")
-            lines.append(f"🏢 *Lugar:* {lugar_val}")
-            lines.append(f"🏛️ *Organismo/s involucrado/s:* {organismo_val}") # Variable agregada y traducida
+            lines.append(f"🏢 *Lugar:* {str(row.get('Lugar', 'Sin especificar')).strip()}")
+            lines.append(f"🏛️ *Organismo/s involucrado/s:* {str(row.get('Organismo/Actor', 'No especificado')).strip()}")
+            lines.append(f"📝 *Explicación breve de la actividad:* {str(row.get('Explicación breve de la actividad', 'Sin notas adicionales')).strip()}")
+            lines.append(f"👥 *Cantidad de personas estimadas:* {f'{asistencia:,} personas estimadas' if asistencia > 0 else 'Sin especificar'}")
             
-            if explicacion and explicacion.lower() != "nan" and explicacion != "":
-                lines.append(f"📝 *Explicación breve de la actividad:* {explicacion}")
-            else:
-                lines.append("📝 *Explicación breve de la actividad:* Sin notas adicionales")
-                
-            lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
-            
-            # SEPARADOR DE WHATSAPP SOLICITADO
             if idx < total_eventos - 1:
                 lines.append("\n❇️🔹❇️🔹❇️\n")
-                
-    lines.append("─────────────────────")
-    
+    lines.append("─────")
     return "\n".join(lines)
 
 # ==========================================
-# 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO ARRIBA DEL TODO)
+# 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO RN)
 # ==========================================
-
-if os.path.exists(LOGO_FILE):
-    st.image(LOGO_FILE, width=180)
-else:
-    st.info("Logotipo Río Negro (SVG)")
+if os.path.exists(LOGO_FILE): st.image(LOGO_FILE, width=180)
+else: st.info("Logotipo Río Negro (SVG)")
 
 st.markdown("---")
-
 col_title_left, col_title_right = st.columns([4, 1.5])
 
 with col_title_left:
@@ -637,499 +553,247 @@ with col_title_left:
 with col_title_right:
     st.write("")
     st.write("")
-    if st.button("🔄 Sincronizar Excel", use_container_width=True):
+    if st.button("🔄 Sincronizar desde GitHub", use_container_width=True):
         st.session_state.agenda = load_data()
-        st.success("¡Base de datos sincronizada!")
+        st.success("¡Base de datos sincronizada desde GitHub!")
         st.rerun()
 
-# Separación de pestañas condicionales según el rol del usuario
 if es_editor:
-    tab1, tab2, tab3, tab4 = st.tabs([
-        "🗓️ Vista de Calendario", 
-        "✍️ Carga Rápida de Actividad", 
-        "✏️ Modificar / Eliminar Actividad",
-        "📊 Base de Datos Completa"
-    ])
+    tab1, tab2, tab3, tab4 = st.tabs(["🗓️ Vista de Calendario", "✍️ Carga Rápida de Actividad", "✏️ Modificar / Eliminar Actividad", "📊 Base de Datos Completa"])
 else:
-    tab1, tab4 = st.tabs([
-        "🗓️ Vista de Calendario", 
-        "📊 Base de Datos Completa"
-    ])
+    tab1, tab4 = st.tabs(["🗓️ Vista de Calendario", "📊 Base de Datos Completa"])
     tab2, tab3 = None, None
 
-# ------------------------------------------
-# TAB 1: CALENDARIO INTERACTIVO
-# ------------------------------------------
+# TAB 1: CALENDARIO
 with tab1:
     st.header("Planificación Territorial")
-    st.write("Haz clic sobre cualquier evento en el calendario para desplegar su ficha de detalles.")
-    
     events = []
-    colores_prioridad = {
-        "ALTA": "#007BE0",       
-        "INTERMEDIA": "#333333", 
-        "BAJA": "#6AC64F"        
-    }
-    COLOR_CON_INVITACION = "#FF7A00" 
+    colores_prioridad = {"ALTA": "#007BE0", "INTERMEDIA": "#333333", "BAJA": "#6AC64F"}
     
     for idx, row in st.session_state.agenda.iterrows():
         fecha_limpia = limpiar_fecha_para_calendario(row['Fecha'])
-        
         if fecha_limpia:
-            invitacion_val = str(row.get('Invitación a participar', '')).strip()
-            tiene_invitacion = invitacion_val != "" and invitacion_val.lower() != "nan"
-            
+            inv_val = str(row.get('Invitación a participar', '')).strip()
+            tiene_inv = inv_val != "" and inv_val.lower() != "nan"
             hora_val = str(row.get('Hora', '')).strip()
-            tiene_hora = hora_val != "" and hora_val.lower() != "nan" and "sin especificar" not in hora_val.lower()
-            prefijo_hora = f"{hora_val} hs - " if tiene_hora else ""
+            prefijo_hora = f"{hora_val} hs - " if tiene_inv and "sin" not in hora_val.lower() else ""
+            act_txt = f"📍 [FECHA FLEXIBLE] {row['Actividad']}" if "sin" in str(row['Fecha']).lower() else str(row['Actividad'])
             
-            # Manejo de etiqueta "Sin especificar" en calendario
-            act_txt = str(row['Actividad'])
-            if "sin especificar" in str(row['Fecha']).lower():
-                act_txt = f"📍 [FECHA FLEXIBLE] {act_txt}"
-                
-            if tiene_invitacion:
-                color_evento = COLOR_CON_INVITACION
-                titulo_mostrar = f"✉️ {prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}"
-            else:
-                color_evento = colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333")
-                titulo_mostrar = f"{prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}"
-                
+            titulo_mostrar = f"✉️ {prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}" if tiene_inv else f"{prefijo_hora}[{row.get('Ciudad', 'Sin especificar')}] {act_txt}"
             events.append({
-                "title": titulo_mostrar,
-                "start": fecha_limpia,
-                "end": fecha_limpia,
-                "color": color_evento,
+                "title": titulo_mostrar, "start": fecha_limpia, "end": fecha_limpia, 
+                "color": "#FF7A00" if tiene_inv else colores_prioridad.get(str(row['Prioridad']).upper().strip(), "#333333"),
                 "extendedProps": {
-                    "fecha_original": str(row['Fecha']),
-                    "hora": hora_val if tiene_hora else "No especificada",
-                    "ciudad": str(row.get('Ciudad', 'Sin especificar')),
-                    "lugar": str(row.get('Lugar', 'Sin especificar')),
-                    "explicacion": str(row.get('Explicación breve de la actividad', row.get('Descripción', ''))),
-                    "asistencia": int(row.get('Cantidad de personas estimadas', 0)),
-                    "organismo": str(row['Organismo/Actor']),
-                    "estado": str(row['Estado']),
-                    "publico": str(row['Público Destinatario']),
-                    "prioridad": str(row['Prioridad']),
-                    "invitacion": invitacion_val if tiene_invitacion else "Sin invitaciones especiales"
+                    "fecha_original": str(row['Fecha']), "hora": hora_val, "ciudad": str(row['Ciudad']), "lugar": str(row['Lugar']),
+                    "explicacion": str(row['Explicación breve de la actividad']), "asistencia": int(row['Cantidad de personas estimadas']),
+                    "organismo": str(row['Organismo/Actor']), "estado": str(row['Estado']), "publico": str(row['Público Destinatario']),
+                    "prioridad": str(row['Prioridad']), "invitacion": inv_val if tiene_inv else "Sin invitaciones especiales"
                 }
             })
-
-    calendar_options = {
-        "headerToolbar": {
-            "left": "prev,next today",
-            "center": "title",
-            "right": "dayGridMonth,timeGridWeek,listMonth"
-        },
-        "initialView": "dayGridMonth",
-        "locale": "es",
-        "buttonText": {
-            "today": "Hoy",
-            "month": "Mes",
-            "week": "Semana",
-            "list": "Lista"
-        }
-    }
-    
-    if len(events) > 0:
-        state = calendar(events=events, options=calendar_options, key="calendar_agenda")
-        
-        if state.get("eventClick"):
-            clicked = state["eventClick"]["event"]
-            props = clicked.get("extendedProps", {})
             
+    if len(events) > 0:
+        state = calendar(events=events, options={"headerToolbar": {"left": "prev,next today", "center": "title", "right": "dayGridMonth,listMonth"}, "initialView": "dayGridMonth", "locale": "es", "buttonText": {"today": "Hoy", "month": "Mes", "list": "Lista"}}, key="calendar_agenda")
+        if state.get("eventClick"):
+            props = state["eventClick"]["event"].get("extendedProps", {})
             st.markdown("---")
             st.subheader("🔍 Detalle de la Actividad Seleccionada")
-            
-            col_det1, col_det2 = st.columns(2)
-            with col_det1:
-                st.markdown(f"**📌 Actividad:** {clicked['title']}")
+            col_d1, col_d2 = st.columns(2)
+            with col_d1:
+                st.markdown(f"**📌 Actividad:** {state['eventClick']['event']['title']}")
                 st.markdown(f"**📅 Fecha original:** `{props.get('fecha_original')}`")
                 st.markdown(f"**⏰ Hora:** `{props.get('hora')}`")
                 st.markdown(f"**📍 Ciudad:** {props.get('ciudad')}")
                 st.markdown(f"**🏢 Lugar físico:** {props.get('lugar')}")
                 st.markdown(f"**👥 Cantidad de personas estimadas:** `{props.get('asistencia')}`")
-            with col_det2:
+            with col_d2:
                 st.markdown(f"**🚨 Prioridad:** `{props.get('prioridad')}`")
                 st.markdown(f"**⚙️ Estado:** `{props.get('estado')}`")
                 st.markdown(f"**✉️ Invitación a participar:** `{props.get('invitacion')}`")
                 st.markdown(f"**📝 Explicación breve:** {props.get('explicacion')}")
-    else:
-        st.warning("No hay eventos programados con fechas válidas para mostrar en el calendario.")
+    else: st.warning("No hay eventos programados para mostrar.")
 
-# ------------------------------------------
-# TAB 2: FORMULARIO DE CARGA DE DATOS (Solo para Editores)
-# ------------------------------------------
+# TAB 2: FORMULARIO DE CARGA
 if es_editor and tab2 is not None:
     with tab2:
         st.header("Registrar Nueva Actividad")
-        st.write("Completa el formulario para agregar un nuevo evento en tiempo real:")
-        
         with st.form("nuevo_evento_form", clear_on_submit=True):
             col1, col2 = st.columns(2)
-            
             with col1:
                 st.markdown("**📅 Fecha del Evento**")
                 fecha_sin_especificar = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=False)
                 mes_propuesto = st.selectbox("Mes de referencia:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
                 anio_propuesto = st.selectbox("Año:", [2026, 2027])
-                f_fecha = st.date_input("Elegir fecha fija (Si la casilla anterior está desmarcada)", datetime.today())
-                
+                f_fecha = st.date_input("Elegir fecha fija", datetime.today())
                 st.markdown("**⏰ Horario del Evento**")
-                hora_sin_especificar = st.checkbox("Dejar hora sin especificar (A coordinar)", value=False)
-                f_hora = st.time_input("Hora fija (Si la casilla anterior está desmarcada)", value=time(9, 0)) 
-                
-                f_actividad = st.text_input("Nombre de la Actividad", placeholder="Ej: Lanzamiento Programa Desafíos")
-                f_ciudad = st.text_input("Ciudad", placeholder="Ej: General Roca")
-                f_lugar = st.text_input("Lugar / Espacio Físico", placeholder="Ej: Aula Magna UNRN")
+                hora_sin_especificar = st.checkbox("Dejar hora sin especificar", value=False)
+                f_hora = st.time_input("Hora fija", value=time(9, 0)) 
+                f_actividad = st.text_input("Nombre de la Actividad")
+                f_ciudad = st.text_input("Ciudad")
+                f_lugar = st.text_input("Lugar / Espacio Físico")
                 f_asistencia = st.number_input("Cantidad de personas estimadas", min_value=0, step=10, value=50)
-                
             with col2:
-                f_organismo = st.text_input("Organismo / Actor principal", placeholder="Ej: Secretaría de Estado de Energía y Ambiente")
+                f_organismo = st.text_input("Organismo / Actor principal")
                 f_prioridad = st.selectbox("Nivel de Prioridad", ["ALTA", "INTERMEDIA", "BAJA"])
                 f_estado = st.selectbox("Estado Actual", ["Pendiente", "En curso", "Finalizado", "Suspendido"])
-                f_publico = st.text_input("Público Objetivo", placeholder="Ej: Jóvenes y adultos")
-                f_invitacion = st.text_input("Invitación a participar", placeholder="Ej: Gobernador + Secretaria de EEYA")
+                f_publico = st.text_input("Público Objetivo")
+                f_invitacion = st.text_input("Invitación a participar")
                 f_explicacion = st.text_area("Explicación breve de la actividad")
                 
-            submitted = st.form_submit_button("💾 Guardar en la Agenda")
-            
+            submitted = st.form_submit_button("💾 Guardar y comitear en GitHub")
             if submitted:
-                if not f_actividad or not f_ciudad:
-                    st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
+                if not f_actividad or not f_ciudad: st.error("Por favor, completa 'Actividad' y 'Ciudad'.")
                 else:
                     if fecha_sin_especificar:
                         meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
-                        mes_num = meses_dict[mes_propuesto]
                         fecha_guardar = f"Sin especificar ({mes_propuesto} {anio_propuesto})"
-                        fecha_tecnica = date(anio_propuesto, mes_num, 1)
+                        fecha_tecnica = date(anio_propuesto, meses_dict[mes_propuesto], 1)
                     else:
                         fecha_guardar = str(f_fecha)
                         fecha_tecnica = f_fecha
-                        
-                    hora_guardar = "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M")
                     
-                    nueva_actividad = {
-                        "Fecha": fecha_guardar,
-                        "Hora": hora_guardar,
-                        "Semana": int(fecha_tecnica.isocalendar()[1]),
-                        "Actividad": f_actividad,
-                        "Ciudad": f_ciudad.strip(),
-                        "Lugar": f_lugar.strip(),
-                        "Explicación breve de la actividad": f_explicacion,
-                        "Cantidad de personas estimadas": int(f_asistencia),
-                        "Organismo/Actor": f_organismo,
-                        "Estado": f_estado,
-                        "Público Destinatario": f_publico,
-                        "Prioridad": f_prioridad,
-                        "Invitación a participar": f_invitacion
+                    nueva = {
+                        "Fecha": fecha_guardar, "Hora": "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M"),
+                        "Semana": int(fecha_tecnica.isocalendar()[1]), "Actividad": f_actividad, "Ciudad": f_ciudad.strip(),
+                        "Lugar": f_lugar.strip(), "Explicación breve de la actividad": f_explicacion, "Cantidad de personas estimadas": int(f_asistencia),
+                        "Organismo/Actor": f_organismo, "Estado": f_estado, "Público Destinatario": f_publico, "Prioridad": f_prioridad, "Invitación a participar": f_invitacion
                     }
-                    
-                    st.session_state.agenda = pd.concat([st.session_state.agenda, pd.DataFrame([nueva_actividad])], ignore_index=True)
-                    st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                    st.success(f"¡Excelente! '{f_actividad}' ha sido guardada exitosamente.")
-                    st.rerun()
+                    df_nuevo = pd.concat([st.session_state.agenda, pd.DataFrame([nueva])], ignore_index=True)
+                    if push_data_to_github(df_nuevo, commit_message=f"Añadir actividad: {f_actividad}"):
+                        st.session_state.agenda = df_nuevo
+                        st.success("¡Actividad guardada e impactada en tu repositorio!")
+                        st.rerun()
 
-# ------------------------------------------
-# TAB 3: MODIFICAR O ELIMINAR ACTIVIDADES (Solo para Editores)
-# ------------------------------------------
+# TAB 3: MODIFICAR / ELIMINAR
 if es_editor and tab3 is not None:
     with tab3:
         st.header("Editar / Cancelar Actividades")
-        df_agenda = st.session_state.agenda.copy()
-        
-        if len(df_agenda) > 0:
-            st.write("Selecciona una actividad de la lista para corregir sus datos o darla de baja:")
-            
-            opciones_actividades = []
-            for idx, row in df_agenda.iterrows():
-                ciudad_txt = str(row.get('Ciudad', 'Sin especificar'))
-                opciones_actividades.append(f"{idx} | [{ciudad_txt}] {row['Actividad']} ({row['Fecha']})")
-                
-            actividad_seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones_actividades)
-            
-            if actividad_seleccionada:
-                idx_seleccionado = int(actividad_seleccionada.split(" | ")[0])
-                registro_actual = df_agenda.loc[idx_seleccionado]
-                
-                st.info(f"Modificando el registro de la fila {idx_seleccionado}")
+        if len(st.session_state.agenda) > 0:
+            opciones = [f"{idx} | [{row.get('Ciudad', 'Sin especificar')}] {row['Actividad']} ({row['Fecha']})" for idx, row in st.session_state.agenda.iterrows()]
+            seleccionada = st.selectbox("Seleccionar Actividad a Gestionar", opciones)
+            if seleccionada:
+                idx_sel = int(seleccionada.split(" | ")[0])
+                reg = st.session_state.agenda.loc[idx_sel]
                 
                 with st.form("form_edicion"):
                     col1_ed, col2_ed = st.columns(2)
-                    
                     with col1_ed:
-                        st.markdown("**📅 Fecha del Evento**")
-                        ed_fecha_sin = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=("sin especificar" in str(registro_actual['Fecha']).lower()))
-                        
-                        try:
-                            fecha_previa = datetime.strptime(limpiar_fecha_para_calendario(registro_actual['Fecha']), "%Y-%m-%d").date()
-                        except:
-                            fecha_previa = datetime.today().date()
-                            
-                        ed_fecha = st.date_input("Fecha", value=fecha_previa)
-                        
-                        st.markdown("**⏰ Horario del Evento**")
-                        ed_hora_sin = st.checkbox("Dejar hora sin especificar (A coordinar)", value=("sin especificar" in str(registro_actual.get('Hora', '')).lower()))
-                        
-                        hora_previa_str = str(registro_actual.get('Hora', '09:00')).strip()
-                        try:
-                            hora_previa = datetime.strptime(hora_previa_str, "%H:%M").time()
-                        except:
-                            hora_previa = time(9, 0)
-                        ed_hora = st.time_input("Hora", value=hora_previa)
-                        
-                        ed_actividad = st.text_input("Nombre de la Actividad", value=str(registro_actual['Actividad']))
-                        ed_ciudad = st.text_input("Ciudad", value=str(registro_actual.get('Ciudad', '')))
-                        ed_lugar = st.text_input("Lugar / Espacio Físico", value=str(registro_actual.get('Lugar', '')))
-                        
-                        try:
-                            asistencia_previa = int(registro_actual.get('Cantidad de personas estimadas', 50))
-                        except:
-                            asistencia_previa = 50
-                        ed_asistencia = st.number_input("Cantidad de personas estimadas", min_value=0, value=asistencia_previa)
-                        
+                        ed_fecha_sin = st.checkbox("Dejar fecha sin especificar", value=("sin" in str(reg['Fecha']).lower()))
+                        try: prev_f = datetime.strptime(limpiar_fecha_para_calendario(reg['Fecha']), "%Y-%m-%d").date()
+                        except: prev_f = datetime.today().date()
+                        ed_fecha = st.date_input("Fecha", value=prev_f)
+                        ed_hora_sin = st.checkbox("Dejar hora sin especificar", value=("sin" in str(reg.get('Hora', '')).lower()))
+                        try: prev_h = datetime.strptime(str(reg.get('Hora', '09:00')).strip(), "%H:%M").time()
+                        except: prev_h = time(9, 0)
+                        ed_hora = st.time_input("Hora", value=prev_h)
+                        ed_actividad = st.text_input("Nombre de la Actividad", value=str(reg['Actividad']))
+                        ed_ciudad = st.text_input("Ciudad", value=str(reg.get('Ciudad', '')))
+                        ed_lugar = st.text_input("Lugar / Espacio Físico", value=str(reg.get('Lugar', '')))
+                        ed_asistencia = st.number_input("Cantidad de personas estimadas", min_value=0, value=int(reg.get('Cantidad de personas estimadas', 50)))
                     with col2_ed:
-                        ed_organismo = st.text_input("Organismo / Actor", value=str(registro_actual['Organismo/Actor']))
-                        opciones_prioridad = ["ALTA", "INTERMEDIA", "BAJA"]
-                        def_prio = opciones_prioridad.index(str(registro_actual['Prioridad']).upper().strip()) if str(registro_actual['Prioridad']).upper().strip() in opciones_prioridad else 1
-                        
-                        opciones_estado = ["Pendiente", "En curso", "Finalizado", "Suspendido"]
-                        def_est = opciones_estado.index(str(registro_actual['Estado']).capitalize().strip()) if str(registro_actual['Estado']).capitalize().strip() in opciones_estado else 0
-                        
-                        ed_prioridad = st.selectbox("Prioridad", opciones_prioridad, index=def_prio)
-                        ed_estado = st.selectbox("Estado", opciones_estado, index=def_est)
-                        ed_publico = st.text_input("Público Destinatario", value=str(registro_actual['Público Destinatario']))
-                        ed_invitacion = st.text_input("Invitación a participar", value=str(registro_actual.get('Invitación a participar', '')))
-                        ed_explicacion = st.text_area("Explicación breve de la actividad", value=str(registro_actual.get('Explicación breve de la actividad', registro_actual.get('Descripción', ''))))
+                        ed_organismo = st.text_input("Organismo / Actor", value=str(reg['Organismo/Actor']))
+                        ed_prioridad = st.selectbox("Prioridad", ["ALTA", "INTERMEDIA", "BAJA"], index=["ALTA", "INTERMEDIA", "BAJA"].index(str(reg['Prioridad']).upper().strip()) if str(reg['Prioridad']).upper().strip() in ["ALTA", "INTERMEDIA", "BAJA"] else 1)
+                        ed_estado = st.selectbox("Estado", ["Pendiente", "En curso", "Finalizado", "Suspendido"], index=["Pendiente", "En curso", "Finalizado", "Suspendido"].index(str(reg['Estado']).capitalize().strip()) if str(reg['Estado']).capitalize().strip() in ["Pendiente", "En curso", "Finalizado", "Suspendido"] else 0)
+                        ed_publico = st.text_input("Público Destinatario", value=str(reg['Público Destinatario']))
+                        ed_invitacion = st.text_input("Invitación a participar", value=str(reg.get('Invitación a participar', '')))
+                        ed_explicacion = st.text_area("Explicación breve", value=str(reg.get('Explicación breve de la actividad', '')))
                     
-                    col_btn1, col_btn2 = st.columns(2)
-                    with col_btn1:
-                        boton_actualizar = st.form_submit_button("🔄 Actualizar Cambios")
-                    with col_btn2:
-                        boton_eliminar = st.form_submit_button("❌ Eliminar Actividad permanentemente")
-                        
-                    if boton_actualizar:
-                        if ed_fecha_sin:
-                            fecha_guardar = "Sin especificar (A coordinar)"
-                            fecha_tecnica = date(date.today().year, date.today().month, 1)
-                        else:
-                            fecha_guardar = str(ed_fecha)
-                            fecha_tecnica = ed_fecha
-                            
-                        st.session_state.agenda.at[idx_seleccionado, 'Fecha'] = fecha_guardar
-                        st.session_state.agenda.at[idx_seleccionado, 'Hora'] = "Sin especificar" if ed_hora_sin else ed_hora.strftime("%H:%M")
-                        st.session_state.agenda.at[idx_seleccionado, 'Semana'] = int(fecha_tecnica.isocalendar()[1])
-                        st.session_state.agenda.at[idx_seleccionado, 'Actividad'] = ed_actividad
-                        st.session_state.agenda.at[idx_seleccionado, 'Ciudad'] = ed_ciudad.strip()
-                        st.session_state.agenda.at[idx_seleccionado, 'Lugar'] = ed_lugar.strip()
-                        st.session_state.agenda.at[idx_seleccionado, 'Explicación breve de la actividad'] = ed_explicacion
-                        st.session_state.agenda.at[idx_seleccionado, 'Cantidad de personas estimadas'] = int(ed_asistencia)
-                        st.session_state.agenda.at[idx_seleccionado, 'Organismo/Actor'] = ed_organismo
-                        st.session_state.agenda.at[idx_seleccionado, 'Estado'] = ed_estado
-                        st.session_state.agenda.at[idx_seleccionado, 'Público Destinatario'] = ed_publico
-                        st.session_state.agenda.at[idx_seleccionado, 'Prioridad'] = ed_prioridad
-                        st.session_state.agenda.at[idx_seleccionado, 'Invitación a participar'] = ed_invitacion
-                        
-                        st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                        st.success("¡Actividad actualizada con éxito!")
-                        st.rerun()
-                        
-                    if boton_eliminar:
-                        st.session_state.agenda = st.session_state.agenda.drop(idx_seleccionado).reset_index(drop=True)
-                        st.session_state.agenda.to_excel(EXCEL_FILE, index=False)
-                        st.warning("La actividad ha sido eliminada del sistema.")
-                        st.rerun()
-        else:
-            st.warning("No hay actividades registradas en la base de datos para editar.")
+                    b_act = st.form_submit_button("🔄 Actualizar en GitHub")
+                    b_eli = st.form_submit_button("❌ Eliminar del Repositorio")
+                    
+                    if b_act:
+                        df_copia = st.session_state.agenda.copy()
+                        f_g = "Sin especificar (A coordinar)" if ed_fecha_sin else str(ed_fecha)
+                        f_t = date(date.today().year, date.today().month, 1) if ed_fecha_sin else ed_fecha
+                        df_copia.at[idx_sel, 'Fecha'] = f_g
+                        df_copia.at[idx_sel, 'Hora'] = "Sin especificar" if ed_hora_sin else ed_hora.strftime("%H:%M")
+                        df_copia.at[idx_sel, 'Semana'] = int(f_t.isocalendar()[1])
+                        df_copia.at[idx_sel, 'Actividad'] = ed_actividad
+                        df_copia.at[idx_sel, 'Ciudad'] = ed_ciudad.strip()
+                        df_copia.at[idx_sel, 'Lugar'] = ed_lugar.strip()
+                        df_copia.at[idx_sel, 'Explicación breve de la actividad'] = ed_explicacion
+                        df_copia.at[idx_sel, 'Cantidad de personas estimadas'] = int(ed_asistencia)
+                        df_copia.at[idx_sel, 'Organismo/Actor'] = ed_organismo
+                        df_copia.at[idx_sel, 'Estado'] = ed_estado
+                        df_copia.at[idx_sel, 'Público Destinatario'] = ed_publico
+                        df_copia.at[idx_sel, 'Prioridad'] = ed_prioridad
+                        df_copia.at[idx_sel, 'Invitación a participar'] = ed_invitacion
+                        if push_data_to_github(df_copia, commit_message=f"Modificar actividad: {ed_actividad}"):
+                            st.session_state.agenda = df_copia
+                            st.success("¡Cambios comitados con éxito!")
+                            st.rerun()
+                    if b_eli:
+                        df_copia = st.session_state.agenda.drop(idx_sel).reset_index(drop=True)
+                        if push_data_to_github(df_copia, commit_message=f"Eliminar actividad fila {idx_sel}"):
+                            st.session_state.agenda = df_copia
+                            st.warning("Registro removido de GitHub.")
+                            st.rerun()
 
-# ------------------------------------------
-# TAB 4: TABLA DE DATOS, BUSCADOR Y EXPORTACIÓN
-# ------------------------------------------
+# TAB 4: REPORTES Y BUSCADOR
 with tab4:
     st.header("Buscador y Reportes")
     df_filtrado = st.session_state.agenda.copy()
-    
     if len(df_filtrado) > 0:
         col_f1, col_f2 = st.columns(2)
-        with col_f1:
-            search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
+        with col_f1: search_query = st.text_input("Buscar por palabra clave...", key="search_tab4").lower()
         with col_f2:
-            ciudades_unicas = sorted(list(df_filtrado['Ciudad'].astype(str).str.strip().unique()))
-            list_ciudades = ["Todas"] + [c for c in ciudades_unicas if c != 'nan' and c != '']
+            list_ciudades = ["Todas"] + [c for c in sorted(list(df_filtrado['Ciudad'].astype(str).str.strip().unique())) if c != 'nan' and c != '']
             filto_ciudad = st.selectbox("Filtrar por Ciudad", list_ciudades, key="filter_loc_tab4")
             
-        # Filtrar por Ciudad en la vista de pantalla
-        if filto_ciudad != "Todas":
-            df_filtrado = df_filtrado[df_filtrado['Ciudad'].str.strip() == filto_ciudad]
-            
-        # Filtrar palabra clave en la vista de pantalla
+        if filto_ciudad != "Todas": df_filtrado = df_filtrado[df_filtrado['Ciudad'].str.strip() == filto_ciudad]
         if search_query:
-            df_filtrado = df_filtrado[
-                df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Explicación breve de la actividad'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Lugar'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Ciudad'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Organismo/Actor'].astype(str).str.lower().str.contains(search_query) |
-                df_filtrado['Invitación a participar'].astype(str).str.lower().str.contains(search_query)
-            ]
+            df_filtrado = df_filtrado[df_filtrado['Actividad'].astype(str).str.lower().str.contains(search_query) | df_filtrado['Explicación breve de la actividad'].astype(str).str.lower().str.contains(search_query)]
             
-        # Renderizado de la tabla en pantalla
         st.dataframe(df_filtrado, use_container_width=True)
         
-        # ==========================================
-        # CONFIGURACIÓN DEL FILTRADO DE DESCARGA (CON FILTRO MENSUAL)
-        # ==========================================
         st.markdown("### 📤 Generar y Exportar Documentos")
-        
-        try:
-            semanas_disponibles = sorted([int(s) for s in df_filtrado['Semana'].dropna().unique() if str(s).strip() != "" and str(s).lower() != "nan"])
-        except:
-            semanas_disponibles = []
+        try: semanas_disponibles = sorted([int(s) for s in df_filtrado['Semana'].dropna().unique() if str(s).strip() != "" and str(s).lower() != "nan"])
+        except: semanas_disponibles = []
             
-        # Obtener los nombres de meses mapeados para el filtro dinámico
         df_filtrado['_temp_mes'] = df_filtrado['Fecha'].apply(obtener_mes_nombre)
         meses_disponibles = [m for m in ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"] if m in df_filtrado['_temp_mes'].unique()]
-        # Agregar "Fecha Flexible / Por definir" al final si existe en el DataFrame
-        if "Fecha Flexible / Por definir" in df_filtrado['_temp_mes'].unique():
-            meses_disponibles.append("Fecha Flexible / Por definir")
         df_filtrado = df_filtrado.drop(columns=['_temp_mes'])
             
         col_config, col_selectores, col_down1, col_down2 = st.columns([2.2, 1.5, 1.3, 1.3])
-        
         with col_config:
-            rango_reporte = st.radio(
-                "Alcance temporal de la descarga:",
-                ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica", "Filtrar por un mes específico"],
-                help="Determina si los archivos descargados y mensajes serán globales, por rango cronológico, de una semana o de un mes específico.",
-                horizontal=False
-            )
-            solo_con_invitacion = st.checkbox(
-                "🔍 Filtrar SOLO actividades con 'Invitación a participar'", 
-                value=False,
-                help="Si lo activas, el Word, Excel y WhatsApp solo contendrán actividades que requieran gestión de invitaciones o protocolo."
-            )
+            rango_reporte = st.radio("Alcance temporal de la descarga:", ["Agenda Completa (Historial + Futuro)", "Desde Hoy hacia adelante", "Filtrar por una semana específica", "Filtrar por un mes específico"])
+            solo_con_invitacion = st.checkbox("🔍 Filtrar SOLO actividades con 'Invitación a participar'", value=False)
             
         df_descarga = df_filtrado.copy()
-        titulo_word = "REPORTE PLANIFICACION TERRITORIAL"
-        titulo_whatsapp = "Cronograma de actividades"
-        rango_aclaracion_word = "Coordinación Interinstitucional"
+        titulo_word, titulo_whatsapp, rango_aclaracion_word = "REPORTE PLANIFICACION TERRITORIAL", "Cronograma de actividades", "Coordinación Interinstitucional"
         
-        # Procesamiento de Filtros Temporales de Descarga
         if rango_reporte == "Desde Hoy hacia adelante":
-            hoy_date = date.today()
-            fechas_comparacion = []
-            for idx, row in df_descarga.iterrows():
-                f_str = limpiar_fecha_para_calendario(row['Fecha'])
-                try:
-                    fechas_comparacion.append(datetime.strptime(f_str, "%Y-%m-%d").date())
-                except:
-                    fechas_comparacion.append(date(2000, 1, 1))
-            df_descarga['_comparar'] = fechas_comparacion
-            df_descarga = df_descarga[df_descarga['_comparar'] >= hoy_date].drop(columns=['_comparar'])
-            
-            titulo_word = "REPORTE PLANIFICACION TERRITORIAL"
-            titulo_whatsapp = "Cronograma de actividades"
+            hoy_d = date.today()
+            df_descarga['_comp'] = df_descarga['Fecha'].apply(lambda x: datetime.strptime(limpiar_fecha_para_calendario(x), "%Y-%m-%d").date() if limpiar_fecha_para_calendario(x) else date(2000,1,1))
+            df_descarga = df_descarga[df_descarga['_comp'] >= hoy_d].drop(columns=['_comp'])
             rango_aclaracion_word = "Planificación desde hoy"
-            
         elif rango_reporte == "Agenda Completa (Historial + Futuro)":
-            titulo_word = "REPORTE COMPLETO DE ACTIVIDADES TERRITORIALES"
-            titulo_whatsapp = "Agenda completa de actividades"
-            rango_aclaracion_word = "Historial completo de gestión"
-            
-        elif rango_reporte == "Filtrar por una semana específica":
+            titulo_word, titulo_whatsapp, rango_aclaracion_word = "REPORTE COMPLETO DE ACTIVIDADES", "Agenda completa de actividades", "Historial completo de gestión"
+        elif rango_reporte == "Filtrar por una semana específica" and semanas_disponibles:
             with col_selectores:
-                if len(semanas_disponibles) > 0:
-                    semana_elegida = st.selectbox(
-                        "Seleccionar Semana:",
-                        semanas_disponibles,
-                        format_func=lambda x: f"Semana {x}"
-                    )
-                    df_descarga = df_descarga[df_descarga['Semana'] == semana_elegida]
-                    
-                    titulo_word = f"REPORTE PLANIFICACION TERRITORIAL - SEMANA {semana_elegida}"
-                    titulo_whatsapp = f"Planificación Territorial - Semana {semana_elegida}"
-                    rango_aclaracion_word = f"Actividades correspondientes a la Semana {semana_elegida}"
-                else:
-                    st.warning("No hay números de semana registrados en el Excel.")
-                    
-        elif rango_reporte == "Filtrar por un mes específico":
+                sem_e = st.selectbox("Seleccionar Semana:", semanas_disponibles)
+                df_descarga = df_descarga[df_descarga['Semana'] == sem_e]
+                titulo_word, titulo_whatsapp = f"REPORTE SEMANA {sem_e}", f"Planificación - Semana {sem_e}"
+        elif rango_reporte == "Filtrar por un mes específico" and meses_disponibles:
             with col_selectores:
-                if len(meses_disponibles) > 0:
-                    mes_elegido = st.selectbox(
-                        "Seleccionar Mes:",
-                        meses_disponibles
-                    )
-                    # Filtramos el DataFrame calculando el mes humano correspondiente
-                    df_descarga['_mes_calculado'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
-                    df_descarga = df_descarga[df_descarga['_mes_calculado'] == mes_elegido].drop(columns=['_mes_calculado'])
+                mes_e = st.selectbox("Seleccionar Mes:", meses_disponibles)
+                df_descarga['_m_c'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
+                df_descarga = df_descarga[df_descarga['_m_c'] == mes_e].drop(columns=['_m_c'])
+                titulo_word, titulo_whatsapp = f"REPORTE - {mes_e.upper()}", f"Planificación - Mes de {mes_e}"
                     
-                    titulo_word = f"REPORTE PLANIFICACION TERRITORIAL - {mes_elegido.upper()}"
-                    titulo_whatsapp = f"Planificación Territorial - Mes de {mes_elegido}"
-                    rango_aclaracion_word = f"Planificación correspondiente al período de {mes_elegido}"
-                else:
-                    st.warning("No se detectan registros ordenados por meses válidos.")
-                    
-        # Aplicación del filtro estricto de Invitaciones
         if solo_con_invitacion:
-            df_descarga = df_descarga[
-                df_descarga['Invitación a participar'].notna() & 
-                (df_descarga['Invitación a participar'].astype(str).str.strip() != "") & 
-                (df_descarga['Invitación a participar'].astype(str).str.strip().str.lower() != "nan")
-            ]
+            df_descarga = df_descarga[df_descarga['Invitación a participar'].notna() & (df_descarga['Invitación a participar'].astype(str).str.strip() != "")]
             titulo_word += " - PROTOCOLO"
             titulo_whatsapp += " (Protocolo)"
-            rango_aclaracion_word += " | Filtrado por Protocolo"
             
         with col_down1:
-            st.write("") 
-            st.write("")
-            output_excel = io.BytesIO()
-            with pd.ExcelWriter(output_excel, engine='openpyxl') as writer:
-                df_descarga.to_excel(writer, index=False, sheet_name='Agenda')
-            excel_bytes = output_excel.getvalue()
-            
-            st.download_button(
-                label="📥 Descargar Excel",
-                data=excel_bytes,
-                file_name="agenda_filtrada_territorial.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                key="btn_download_excel",
-                use_container_width=True
-            )
-            
+            out_e = io.BytesIO()
+            with pd.ExcelWriter(out_e, engine='openpyxl') as writer: df_descarga.to_excel(writer, index=False, sheet_name='Agenda')
+            st.download_button(label="📥 Descargar Excel", data=out_e.getvalue(), file_name="agenda_filtrada_territorial.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", use_container_width=True)
         with col_down2:
-            st.write("") 
-            st.write("")
             if LIBRERIA_DOCX_LISTA:
-                try:
-                    word_bytes = crear_reporte_word_areas(
-                        df_descarga, 
-                        titulo_personalizado=titulo_word, 
-                        aclaracion_rango=rango_aclaracion_word
-                    )
-                    st.download_button(
-                        label="📝 Descargar Reporte Word",
-                        data=word_bytes,
-                        file_name="Reporte_Planificacion_Territorial.docx",
-                        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-                        key="btn_download_word",
-                        use_container_width=True
-                    )
-                except Exception as e:
-                    st.error(f"Error técnico en el formato: {e}")
-            else:
-                st.warning("Instalando componente de Word en el servidor. Aguarda unos instantes.")
+                st.download_button(label="📝 Descargar Reporte Word", data=crear_reporte_word_areas(df_descarga, titulo_personalizado=titulo_word, aclaracion_rango=rango_aclaracion_word), file_name="Reporte_Planificacion_Territorial.docx", mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document", use_container_width=True)
                 
-        # ==========================================
-        # SECCIÓN DE REPORTE FORMATEADO PARA WHATSAPP
-        # ==========================================
         st.markdown("---")
         st.markdown("### 💬 Copiar Reporte para WhatsApp")
-        st.write("Copiá y pegá el siguiente mensaje estructurado con los campos oficiales requeridos:")
-        
-        mensaje_whatsapp_generado = generar_mensaje_whatsapp(df_descarga, titulo_cabecera=titulo_whatsapp)
-        
-        st.code(mensaje_whatsapp_generado, language="text")
-        
-    else:
-        st.warning("La base de datos está vacía o cargando. Prueba pulsar el botón '🔄 Sincronizar Excel' arriba a la derecha.")
+        st.code(generar_mensaje_whatsapp(df_descarga, titulo_cabecera=titulo_whatsapp), language="text")
+    else: st.warning("La base de datos en GitHub está vacía o cargando.")
