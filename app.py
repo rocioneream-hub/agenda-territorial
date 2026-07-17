@@ -543,7 +543,7 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
     return buffer.getvalue()
 
 # ==========================================
-# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (SEPARADOR ACTUALIZADO)
+# FUNCION PARA GENERAR MENSAJE FORMATEADO DE WHATSAPP (CON NUEVA VARIABLE "ORGANISMO/ACTOR" TRADUCIDA)
 # ==========================================
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
@@ -585,6 +585,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
             
             ciudad_val = str(row.get('Ciudad', 'Sin especificar')).strip()
             lugar_val = str(row.get('Lugar', 'Sin especificar')).strip()
+            organismo_val = str(row.get('Organismo/Actor', 'No especificado')).strip()
             explicacion = str(row.get('Explicación breve de la actividad', row.get('Descripción', ''))).strip()
             
             try:
@@ -593,11 +594,12 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
             except:
                 asistencia_txt = "Sin especificar"
                 
-            # Renderizado de los 6 campos solicitados
+            # Renderizado de los campos oficiales requeridos
             lines.append(f"📌 *Actividad {idx+1}:* {act_titulo}")
             lines.append(f"📍 *Ciudad:* {ciudad_val}")
             lines.append(f"📅 *Fecha:* {fecha_mostrar}{hora_txt}")
             lines.append(f"🏢 *Lugar:* {lugar_val}")
+            lines.append(f"🏛️ *Organismo/s involucrado/s:* {organismo_val}") # Variable agregada y traducida
             
             if explicacion and explicacion.lower() != "nan" and explicacion != "":
                 lines.append(f"📝 *Explicación breve de la actividad:* {explicacion}")
@@ -606,7 +608,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
                 
             lines.append(f"👥 *Cantidad de personas estimadas:* {asistencia_txt}")
             
-            # NUEVO SEPARADOR DE WHATSAPP SOLICITADO
+            # SEPARADOR DE WHATSAPP SOLICITADO
             if idx < total_eventos - 1:
                 lines.append("\n❇️🔹❇️🔹❇️\n")
                 
@@ -797,7 +799,7 @@ if es_editor and tab2 is not None:
                     st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
                 else:
                     if fecha_sin_especificar:
-                        meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+                        meses_dict = {"Enero": 1, "Febrero": 2, "Marzo", 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
                         mes_num = meses_dict[mes_propuesto]
                         fecha_guardar = f"Sin especificar ({mes_propuesto} {anio_propuesto})"
                         fecha_tecnica = date(anio_propuesto, mes_num, 1)
@@ -975,7 +977,7 @@ with tab4:
         st.dataframe(df_filtrado, use_container_width=True)
         
         # ==========================================
-        # CONFIGURACIÓN DEL FILTRADO DE DESCARGA (CON NUEVO FILTRO MENSUAL)
+        # CONFIGURACIÓN DEL FILTRADO DE DESCARGA (CON FILTRO MENSUAL)
         # ==========================================
         st.markdown("### 📤 Generar y Exportar Documentos")
         
