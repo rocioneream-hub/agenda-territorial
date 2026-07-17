@@ -60,14 +60,14 @@ es_editor = (password == "UPEU2026")
 # ==========================================
 
 def obtener_cliente_gspread():
+    """Genera la conexión limpiando de raíz la clave privada para evitar el error PEM al leer y escribir."""
     alcance = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
-    # Extraemos las credenciales guardadas en Secrets
+    # Clonamos de manera segura las credenciales en un diccionario común de Python
     credenciales_dict = dict(st.secrets["gcp_service_account"])
     
-    # PARCHE DE SEGURIDAD ABSOLUTO PARA EVITAR EL ERROR PEM NATIVO
-    # Reemplaza barras invertidas duplicadas accidentales por saltos de línea reales de firma digital
-    pk = credenciales_dict["private_key"]
+    # Reemplazo dinámico de barras de escape por saltos de línea reales de firma PEM
+    pk = str(credenciales_dict.get("private_key", ""))
     if "\\n" in pk:
         pk = pk.replace("\\n", "\n")
     credenciales_dict["private_key"] = pk
@@ -246,7 +246,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         
     lines = ["🏛️ *UPEU - PLANIFICACIÓN TERRITORIAL*", f"📅 *{titulo_cabecera}*:", "─────────────────────"]
     total_eventos = len(df_procesar)
-    if total_eventEventos == 0:
+    if total_eventos == 0:
         lines.append("*(Sin actividades planificadas)*")
     else:
         for idx, row in df_procesar.iterrows():
