@@ -56,15 +56,29 @@ password = st.sidebar.text_input("Contraseña de Editor", type="password")
 es_editor = (password == "UPEU2026")
 
 # ==========================================
-# 3. AUTENTICACIÓN Y CONEXIÓN CON LA API OFICIAL
+# 3. AUTENTICACIÓN Y CONEXIÓN CON LA API OFICIAL (CON DOBLE FILTRO DEFENSIVO)
 # ==========================================
 def obtener_servicio_sheets():
     alcance = ["https://www.googleapis.com/auth/spreadsheets"]
-    credenciales_dict = dict(st.secrets["gcp_service_account"])
     
-    # Parche por si StreamlitCloud deforma los saltos de línea al guardar
-    if "\\n" in credenciales_dict["private_key"]:
-        credenciales_dict["private_key"] = credenciales_dict["private_key"].replace("\\n", "\n")
+    # Clonamos los datos a un diccionario común de Python para poder manipular la clave libremente
+    credenciales_dict = {}
+    for k, v in st.secrets["gcp_service_account"].items():
+        credenciales_dict[k] = v
+        
+    # TRIPLE LIMPIEZA RADICAL ANTI-MUTACIÓN DE DE TRADUCCIÓN PEM
+    pk = str(credenciales_dict.get("private_key", "")).strip()
+    
+    # Filtro 1: Corregir el bug de barras cuádruples que introduce Streamlit al guardar
+    pk = pk.replace("\\\\n", "\n")
+    # Filtro 2: Corregir barras simples textuales
+    pk = pk.replace("\\n", "\n")
+    # Filtro 3: Forzar saltos de línea reales si se guardó todo en un solo renglón
+    if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk.replace("-----BEGIN PRIVATE KEY-----", ""):
+        pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
+        pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
+        
+    credenciales_dict["private_key"] = pk
         
     credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
     return build('sheets', 'v4', credentials=credenciales)
@@ -74,7 +88,6 @@ def load_data_from_sheets():
         servicio = obtener_servicio_sheets()
         planilla_id = st.secrets["spreadsheet"]["id"]
         
-        # Leemos el rango extendido de la primera pestaña de la hoja de cálculo
         resultado = servicio.spreadsheets().values().get(spreadsheetId=planilla_id, range="A1:Z2000").execute()
         filas = resultado.get('values', [])
         
@@ -84,7 +97,6 @@ def load_data_from_sheets():
         encabezados = [str(h).strip() for h in filas[0]]
         datos_crudos = filas[1:]
         
-        # Emparejamos filas que tengan celdas vacías al final para evitar descalces en Pandas
         datos_normalizados = []
         for f in datos_crudos:
             fila_extendida = f + [""] * (len(encabezados) - len(f))
@@ -117,10 +129,8 @@ def guardar_todo_en_sheets(df):
         lista_datos = [df.columns.values.tolist()] + df.astype(str).values.tolist()
         cuerpo = {'values': lista_datos}
         
-        # Limpiamos primero el rango viejo para evitar remanentes si se achica la base de datos
         servicio.spreadsheets().values().clear(spreadsheetId=planilla_id, range="A1:Z2000").execute()
         
-        # Sobrescribimos de manera atómica con codificación nativa
         servicio.spreadsheets().values().update(
             spreadsheetId=planilla_id, range="A1",
             valueInputOption="USER_ENTERED", body=cuerpo
