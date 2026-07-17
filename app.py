@@ -852,7 +852,7 @@ if es_editor and tab3 is not None:
                 
                 st.info(f"Modificando el registro de la fila {idx_seleccionado}")
                 
-                with St.form("form_edicion"):
+                with st.form("form_edicion"):
                     col1_ed, col2_ed = st.columns(2)
                     
                     with col1_ed:
