@@ -3,4 +3,4 @@ pandas
 openpyxl
 streamlit-calendar
 python-docx
-streamlit-gsheets
+st-gsheets-connection
