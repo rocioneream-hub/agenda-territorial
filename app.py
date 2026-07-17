@@ -4,6 +4,7 @@ from streamlit_calendar import calendar
 from google.oauth2.service_account import Credentials
 from googleapiclient.discovery import build
 from datetime import datetime, time, date
+import json
 import re
 import os
 import io
@@ -20,7 +21,7 @@ except ImportError:
     LIBRERIA_DOCX_LISTA = False
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
+# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
 # ==========================================
 st.set_page_config(
     layout="wide", 
@@ -56,32 +57,23 @@ password = st.sidebar.text_input("Contraseña de Editor", type="password")
 es_editor = (password == "UPEU2026")
 
 # ==========================================
-# 3. AUTENTICACIÓN Y CONEXIÓN CON LA API OFICIAL (CON DOBLE FILTRO DEFENSIVO)
+# 3. AUTENTICACIÓN Y CONEXIÓN EN MEMORIA RAM
 # ==========================================
 def obtener_servicio_sheets():
     alcance = ["https://www.googleapis.com/auth/spreadsheets"]
-    
-    # Clonamos los datos a un diccionario común de Python para poder manipular la clave libremente
-    credenciales_dict = {}
-    for k, v in st.secrets["gcp_service_account"].items():
-        credenciales_dict[k] = v
+    try:
+        json_texto = st.secrets["gcp_service_account"]["json_puro"]
+        credenciales_dict = json.loads(json_texto)
         
-    # TRIPLE LIMPIEZA RADICAL ANTI-MUTACIÓN DE DE TRADUCCIÓN PEM
-    pk = str(credenciales_dict.get("private_key", "")).strip()
-    
-    # Filtro 1: Corregir el bug de barras cuádruples que introduce Streamlit al guardar
-    pk = pk.replace("\\\\n", "\n")
-    # Filtro 2: Corregir barras simples textuales
-    pk = pk.replace("\\n", "\n")
-    # Filtro 3: Forzar saltos de línea reales si se guardó todo en un solo renglón
-    if "-----BEGIN PRIVATE KEY-----" in pk and "\n" not in pk.replace("-----BEGIN PRIVATE KEY-----", ""):
-        pk = pk.replace("-----BEGIN PRIVATE KEY-----", "-----BEGIN PRIVATE KEY-----\n")
-        pk = pk.replace("-----END PRIVATE KEY-----", "\n-----END PRIVATE KEY-----")
-        
-    credenciales_dict["private_key"] = pk
-        
-    credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
-    return build('sheets', 'v4', credentials=credenciales)
+        # Blindaje contra saltos de línea rotos
+        if "\\n" in credenciales_dict["private_key"]:
+            credenciales_dict["private_key"] = credenciales_dict["private_key"].replace("\\n", "\n")
+            
+        credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
+        return build('sheets', 'v4', credentials=credenciales)
+    except Exception as e:
+        st.error(f"Error técnico en el descifrado de llaves: {e}")
+        st.stop()
 
 def load_data_from_sheets():
     try:
