@@ -799,7 +799,7 @@ if es_editor and tab2 is not None:
                     st.error("Por favor, completa obligatoriamente los campos 'Actividad' y 'Ciudad'.")
                 else:
                     if fecha_sin_especificar:
-                        meses_dict = {"Enero": 1, "Febrero": 2, "Marzo", 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+                        meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
                         mes_num = meses_dict[mes_propuesto]
                         fecha_guardar = f"Sin especificar ({mes_propuesto} {anio_propuesto})"
                         fecha_tecnica = date(anio_propuesto, mes_num, 1)
