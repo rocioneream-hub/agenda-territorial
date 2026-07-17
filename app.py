@@ -3,6 +3,7 @@ import pandas as pd
 from streamlit_calendar import calendar
 import gspread
 from google.oauth2.service_account import Credentials
+import base64 # Librería nativa para decodificación segura
 from datetime import datetime, time, date
 import re
 import os
@@ -60,23 +61,18 @@ es_editor = (password == "UPEU2026")
 # ==========================================
 
 def obtener_cliente_gspread():
-    """Genera la conexión normalizando la firma PEM con doble filtro de reemplazo."""
+    """Genera la conexión decodificando el string Base64 de forma blindada contra cualquier error de formato."""
     alcance = ["https://www.googleapis.com/auth/spreadsheets", "https://www.googleapis.com/auth/drive"]
     
-    # Clonamos de manera limpia las credenciales de los Secrets
     credenciales_dict = {}
     for k, v in st.secrets["gcp_service_account"].items():
-        credenciales_dict[k] = v
-        
-    # DOBLE FILTRO ANTI-MUTACIÓN DE STREAMLIT CLOUD
-    pk = str(credenciales_dict.get("private_key", "")).strip()
-    
-    # Caso 1: Corregir barras duplicadas que mete Streamlit Cloud en el guardado
-    pk = pk.replace("\\\\n", "\n")
-    # Caso 2: Corregir barras simples literales de escape
-    pk = pk.replace("\\n", "\n")
-    
-    credenciales_dict["private_key"] = pk
+        if k != "private_key_base64":
+            credenciales_dict[k] = v
+            
+    # Reconstrucción de la firma digital original directo en la memoria RAM
+    b64_string = st.secrets["gcp_service_account"]["private_key_base64"]
+    decoded_pk = base64.b64decode(b64_string).decode("utf-8")
+    credenciales_dict["private_key"] = decoded_pk
     
     credenciales = Credentials.from_service_account_info(credenciales_dict, scopes=alcance)
     return gspread.authorize(credenciales)
