@@ -3,4 +3,5 @@ pandas
 openpyxl
 streamlit-calendar
 python-docx
-st-gsheets-connection
+gspread
+google-auth
