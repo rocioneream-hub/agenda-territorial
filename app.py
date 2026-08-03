@@ -257,14 +257,15 @@ def limpiar_fecha_para_calendario(val):
 
 def obtener_mes_nombre(val_fecha):
     meses_es = ["", "Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
-    f_limpia = limpiar_fecha_para_calendario(val_fecha)
+    val_str = str(val_fecha).strip()
+    f_limpia = limpiar_fecha_para_calendario(val_str)
     if f_limpia:
         try:
             return meses_es[int(f_limpia.split("-")[1])]
         except:
             pass
     for m in meses_es:
-        if m and m.lower() in str(val_fecha).lower():
+        if m and m.lower() in val_str.lower():
             return m
     return "Fecha Flexible / Por definir"
 
@@ -493,13 +494,9 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
     
     for idx, row in df_procesar.iterrows():
         fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
-        hora_val = str(row.get('Hora', 'Sin especificar')).strip()
         
-        es_fecha_sin = "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == ""
-        es_hora_sin = "sin especificar" in hora_val.lower() or hora_val == ""
-        
-        # Consideramos flexible si no tiene fecha fija O si no tiene hora fija definida
-        if es_fecha_sin or es_hora_sin:
+        # Consideramos flexible únicamente las actividades con fecha sin especificar/a coordinar
+        if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
             flexibles.append(row)
         else:
             row_copy = row.copy()
@@ -519,8 +516,12 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         lines.append("*(Sin actividades planificadas para el rango seleccionado)*")
     else:
         for idx, row in enumerate(lista_final):
-            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip().split(" ")[0]
-            fecha_mostrar = "Sin especificar (A coordinar por el territorio)" if "sin" in fecha_val.lower() or fecha_val == "" else fecha_val
+            fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
+            if "sin" in fecha_val.lower() or fecha_val == "":
+                fecha_mostrar = "Sin especificar (A coordinar por el territorio)"
+            else:
+                fecha_mostrar = fecha_val.split(" ")[0]
+                
             hora_val = str(row.get('Hora', 'Sin especificar')).strip()
             hora_txt = " - Horario sin especificar" if "sin" in hora_val.lower() or hora_val == "" else f" - {hora_val} hs"
             asistencia = int(row.get('Cantidad de personas estimadas', 0))
@@ -779,14 +780,7 @@ with tab4:
             with col_selectores:
                 mes_e = st.selectbox("Seleccionar Mes:", meses_disponibles)
                 df_descarga['_m_c'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
-                
-                # Mantiene eventos del mes seleccionado O eventos con fecha flexible/por definir
-                df_descarga = df_descarga[
-                    (df_descarga['_m_c'] == mes_e) | 
-                    (df_descarga['Fecha'].astype(str).str.lower().str.contains("sin especificar")) |
-                    (df_descarga['Hora'].astype(str).str.lower().str.contains("sin especificar"))
-                ].drop(columns=['_m_c'])
-                
+                df_descarga = df_descarga[df_descarga['_m_c'] == mes_e].drop(columns=['_m_c'])
                 titulo_word, titulo_whatsapp = f"REPORTE - {mes_e.upper()}", f"Planificación - Mes de {mes_e}"
                     
         if solo_con_invitacion:
