@@ -80,7 +80,7 @@ st.markdown("""
     }
     
     button[kind="primary"]:hover {
-        background-color: #59b040 !important; /* Verde RN ligeramente más oscuro para el hover */
+        background-color: #59b040 !important;
     }
     
     /* Hashtag de gestión oficial #gobiernodelosrionegrinos */
@@ -495,7 +495,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
     for idx, row in df_procesar.iterrows():
         fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
         
-        # Consideramos flexible únicamente las actividades con fecha sin especificar/a coordinar
+        # Flexibles: actividades tildadas sin fecha exacta
         if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
             flexibles.append(row)
         else:
@@ -507,6 +507,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         df_cron = pd.DataFrame(cronologicos).sort_values(by='_fecha_orden').reset_index(drop=True)
         cronologicos = [row for _, row in df_cron.iterrows()]
         
+    # Orden estricto: flexibles primero, cronológicos después
     lista_final = flexibles + cronologicos
     total_eventos = len(lista_final)
     
@@ -615,7 +616,7 @@ with tab1:
                 st.markdown(f"**📝 Explicación breve:** {props.get('explicacion')}")
     else: st.warning("No hay eventos programados para mostrar.")
 
-# TAB 2: FORMULARIO DE CARGA
+# TAB 2: FORMULARIO DE CARGA CON DESPLIEGUE DINÁMICO DE MES
 if es_editor and tab2 is not None:
     with tab2:
         st.header("Registrar Nueva Actividad")
@@ -624,12 +625,23 @@ if es_editor and tab2 is not None:
             with col1:
                 st.markdown("**📅 Fecha del Evento**")
                 fecha_sin_especificar = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=False)
-                mes_propuesto = st.selectbox("Mes de referencia:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
-                anio_propuesto = st.selectbox("Año:", [2026, 2027])
-                f_fecha = st.date_input("Elegir fecha fija", datetime.today())
+                
+                # Despliegue dinámico de selector de mes si la fecha es flexible
+                if fecha_sin_especificar:
+                    mes_propuesto = st.selectbox("Mes de referencia asignado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
+                    anio_propuesto = st.selectbox("Año:", [2026, 2027])
+                    f_fecha = None
+                else:
+                    f_fecha = st.date_input("Elegir fecha fija", datetime.today())
+                    mes_propuesto, anio_propuesto = None, None
+
                 st.markdown("**⏰ Horario del Evento**")
                 hora_sin_especificar = st.checkbox("Dejar hora sin especificar", value=False)
-                f_hora = st.time_input("Hora fija", value=time(9, 0)) 
+                if hora_sin_especificar:
+                    f_hora = None
+                else:
+                    f_hora = st.time_input("Hora fija", value=time(9, 0))
+                    
                 f_actividad = st.text_input("Nombre de la Actividad")
                 f_ciudad = st.text_input("Ciudad")
                 f_lugar = st.text_input("Lugar / Espacio Físico")
@@ -655,10 +667,19 @@ if es_editor and tab2 is not None:
                         fecha_tecnica = f_fecha
                     
                     nueva = {
-                        "Fecha": fecha_guardar, "Hora": "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M"),
-                        "Semana": int(fecha_tecnica.isocalendar()[1]), "Actividad": f_actividad, "Ciudad": f_ciudad.strip(),
-                        "Lugar": f_lugar.strip(), "Explicación breve de la actividad": f_explicacion, "Cantidad de personas estimadas": int(f_asistencia),
-                        "Organismo/Actor": f_organismo, "Estado": f_estado, "Público Destinatario": f_publico, "Prioridad": f_prioridad, "Invitación a participar": f_invitacion
+                        "Fecha": fecha_guardar, 
+                        "Hora": "Sin especificar" if hora_sin_especificar else f_hora.strftime("%H:%M"),
+                        "Semana": int(fecha_tecnica.isocalendar()[1]), 
+                        "Actividad": f_actividad, 
+                        "Ciudad": f_ciudad.strip(),
+                        "Lugar": f_lugar.strip(), 
+                        "Explicación breve de la actividad": f_explicacion, 
+                        "Cantidad de personas estimadas": int(f_asistencia),
+                        "Organismo/Actor": f_organismo, 
+                        "Estado": f_estado, 
+                        "Público Destinatario": f_publico, 
+                        "Prioridad": f_prioridad, 
+                        "Invitación a participar": f_invitacion
                     }
                     df_nuevo = pd.concat([st.session_state.agenda, pd.DataFrame([nueva])], ignore_index=True)
                     if push_data_to_github(df_nuevo, commit_message=f"Añadir actividad: {f_actividad}"):
@@ -666,7 +687,7 @@ if es_editor and tab2 is not None:
                         st.success("¡Actividad guardada e impactada en tu repositorio!")
                         st.rerun()
 
-# TAB 3: MODIFICAR / ELIMINAR
+# TAB 3: MODIFICAR / ELIMINAR CON EDICIÓN DE MES DE REFERENCIA
 if es_editor and tab3 is not None:
     with tab3:
         st.header("Editar / Cancelar Actividades")
@@ -681,13 +702,28 @@ if es_editor and tab3 is not None:
                     col1_ed, col2_ed = st.columns(2)
                     with col1_ed:
                         ed_fecha_sin = st.checkbox("Dejar fecha sin especificar", value=("sin" in str(reg['Fecha']).lower()))
-                        try: prev_f = datetime.strptime(limpiar_fecha_para_calendario(reg['Fecha']), "%Y-%m-%d").date()
-                        except: prev_f = datetime.today().date()
-                        ed_fecha = st.date_input("Fecha", value=prev_f)
+                        
+                        if ed_fecha_sin:
+                            meses_lista = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"]
+                            mes_actual_detected = obtener_mes_nombre(reg['Fecha'])
+                            idx_m = meses_lista.index(mes_actual_detected) if mes_actual_detected in meses_lista else datetime.today().month-1
+                            ed_mes_propuesto = st.selectbox("Mes de referencia asignado:", meses_lista, index=idx_m)
+                            ed_anio_propuesto = st.selectbox("Año:", [2026, 2027], key="ed_anio")
+                            ed_fecha = None
+                        else:
+                            try: prev_f = datetime.strptime(limpiar_fecha_para_calendario(reg['Fecha']), "%Y-%m-%d").date()
+                            except: prev_f = datetime.today().date()
+                            ed_fecha = st.date_input("Fecha", value=prev_f)
+                            ed_mes_propuesto, ed_anio_propuesto = None, None
+
                         ed_hora_sin = st.checkbox("Dejar hora sin especificar", value=("sin" in str(reg.get('Hora', '')).lower()))
-                        try: prev_h = datetime.strptime(str(reg.get('Hora', '09:00')).strip(), "%H:%M").time()
-                        except: prev_h = time(9, 0)
-                        ed_hora = st.time_input("Hora", value=prev_h)
+                        if ed_hora_sin:
+                            ed_hora = None
+                        else:
+                            try: prev_h = datetime.strptime(str(reg.get('Hora', '09:00')).strip(), "%H:%M").time()
+                            except: prev_h = time(9, 0)
+                            ed_hora = st.time_input("Hora", value=prev_h)
+
                         ed_actividad = st.text_input("Nombre de la Actividad", value=str(reg['Actividad']))
                         ed_ciudad = st.text_input("Ciudad", value=str(reg.get('Ciudad', '')))
                         ed_lugar = st.text_input("Lugar / Espacio Físico", value=str(reg.get('Lugar', '')))
@@ -705,8 +741,14 @@ if es_editor and tab3 is not None:
                     
                     if b_act:
                         df_copia = st.session_state.agenda.copy()
-                        f_g = "Sin especificar (A coordinar)" if ed_fecha_sin else str(ed_fecha)
-                        f_t = date(date.today().year, date.today().month, 1) if ed_fecha_sin else ed_fecha
+                        if ed_fecha_sin:
+                            f_g = f"Sin especificar ({ed_mes_propuesto} {ed_anio_propuesto})"
+                            meses_dict = {"Enero": 1, "Febrero": 2, "Marzo": 3, "Abril": 4, "Mayo": 5, "Junio": 6, "Julio": 7, "Agosto": 8, "Septiembre": 9, "Octubre": 10, "Noviembre": 11, "Diciembre": 12}
+                            f_t = date(ed_anio_propuesto, meses_dict[ed_mes_propuesto], 1)
+                        else:
+                            f_g = str(ed_fecha)
+                            f_t = ed_fecha
+
                         df_copia.at[idx_sel, 'Fecha'] = f_g
                         df_copia.at[idx_sel, 'Hora'] = "Sin especificar" if ed_hora_sin else ed_hora.strftime("%H:%M")
                         df_copia.at[idx_sel, 'Semana'] = int(f_t.isocalendar()[1])
