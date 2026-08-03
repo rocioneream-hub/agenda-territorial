@@ -488,26 +488,28 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
     df_procesar = df.copy()
     
-    # Clasificación y ordenamiento de registros
     flexibles = []
     cronologicos = []
     
     for idx, row in df_procesar.iterrows():
         fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
-        if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
+        hora_val = str(row.get('Hora', 'Sin especificar')).strip()
+        
+        es_fecha_sin = "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == ""
+        es_hora_sin = "sin especificar" in hora_val.lower() or hora_val == ""
+        
+        # Consideramos flexible si no tiene fecha fija O si no tiene hora fija definida
+        if es_fecha_sin or es_hora_sin:
             flexibles.append(row)
         else:
-            # Adjuntamos la fecha técnica de ordenamiento de forma segura
             row_copy = row.copy()
             row_copy['_fecha_orden'] = limpiar_fecha_para_calendario(fecha_val) or "9999-12-31"
             cronologicos.append(row_copy)
             
-    # Ordenar cronológicos por su fecha limpia
     if cronologicos:
         df_cron = pd.DataFrame(cronologicos).sort_values(by='_fecha_orden').reset_index(drop=True)
         cronologicos = [row for _, row in df_cron.iterrows()]
         
-    # Consolidar lista de salida (flexibles primero)
     lista_final = flexibles + cronologicos
     total_eventos = len(lista_final)
     
@@ -777,7 +779,14 @@ with tab4:
             with col_selectores:
                 mes_e = st.selectbox("Seleccionar Mes:", meses_disponibles)
                 df_descarga['_m_c'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
-                df_descarga = df_descarga[df_descarga['_m_c'] == mes_e].drop(columns=['_m_c'])
+                
+                # Mantiene eventos del mes seleccionado O eventos con fecha flexible/por definir
+                df_descarga = df_descarga[
+                    (df_descarga['_m_c'] == mes_e) | 
+                    (df_descarga['Fecha'].astype(str).str.lower().str.contains("sin especificar")) |
+                    (df_descarga['Hora'].astype(str).str.lower().str.contains("sin especificar"))
+                ].drop(columns=['_m_c'])
+                
                 titulo_word, titulo_whatsapp = f"REPORTE - {mes_e.upper()}", f"Planificación - Mes de {mes_e}"
                     
         if solo_con_invitacion:
