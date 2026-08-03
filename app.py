@@ -20,7 +20,7 @@ except ImportError:
     LIBRERIA_DOCX_LISTA = False
 
 # ==========================================
-# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS (IDENTIDAD VISUAL OFICIAL)
+# 1. CONFIGURACIÓN DE LA PÁGINA Y ESTILOS
 # ==========================================
 st.set_page_config(
     layout="wide", 
@@ -28,177 +28,33 @@ st.set_page_config(
     page_icon="🗓️"
 )
 
-# Inyección de estilos CSS basados estrictamente en el Manual de Marca de Río Negro
 st.markdown("""
     <style>
-    /* Importación de la tipografía oficial Figtree */
     @import url('https://fonts.googleapis.com/css2?family=Figtree:ital,wght@0,300..900;1,300..900&display=swap');
-    
-    /* Configuración de fuentes globales */
-    html, body, [class*="css"], .stMarkdown, p, div {
-        font-family: 'Figtree', sans-serif !important;
-    }
-    
-    /* Fondo general utilizando el Gris RN oficial (#E8E8E8) */
+    html, body, [class*="css"], .stMarkdown, p, div { font-family: 'Figtree', sans-serif !important; }
     .stApp, .main, [data-testid="stAppViewContainer"], [data-testid="stHeader"], [data-testid="stMainBlockContainer"] { 
         background-color: #E8E8E8 !important; 
-        background: #E8E8E8 !important;
     }
-    
-    /* Diseño de tarjetas y formularios (Fondo blanco rígido y bordes limpios) */
     div[data-testid="stForm"] { 
-        background-color: #FFFFFF !important; 
-        border-radius: 8px !important; 
-        padding: 30px !important; 
-        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.05) !important;
-        border: 1px solid #D1D5DB !important;
+        background-color: #FFFFFF !important; border-radius: 8px !important; padding: 30px !important; 
+        box-shadow: 0px 4px 6px rgba(0, 0, 0, 0.05) !important; border: 1px solid #D1D5DB !important;
     }
-    
-    /* Títulos Principales en Negro Puro */
-    h1 { 
-        color: #000000 !important; 
-        font-weight: 800 !important;
-        font-size: 2.2rem !important;
-        margin-top: 10px !important;
-        margin-bottom: 0px !important;
-    }
-    
-    /* Subtítulos en el Azul RN oficial (#007BE0) */
-    h2, h3 { 
-        color: #007BE0 !important; 
-        font-weight: 700 !important;
-    }
-    
-    /* Estilo del botón primario con el Verde RN oficial (#6AC64F) */
-    button[kind="primary"] {
-        background-color: #6AC64F !important;
-        color: #FFFFFF !important;
-        font-weight: 700 !important;
-        border-radius: 6px !important;
-        border: none !important;
-        transition: background-color 0.2s ease;
-    }
-    
-    button[kind="primary"]:hover {
-        background-color: #59b040 !important;
-    }
-    
-    /* Hashtag de gestión oficial #gobiernodelosrionegrinos */
-    .hashtag-gestion {
-        color: #6AC64F !important;
-        font-weight: 800;
-        font-size: 1.1rem;
-    }
-
-    /* Forzar nitidez absoluta en el renderizado de imágenes vectoriales */
-    img {
-        image-rendering: -webkit-optimize-contrast !important;
-        image-rendering: crisp-edges !important;
-    }
-
-    /* ==========================================
-       ANULAR EL ROJO NATIVO DE STREAMLIT (TABS Y SELECCIONES)
-       ========================================== */
-    div[data-baseweb="tab-list"] button[aria-selected="true"] {
-        color: #007BE0 !important;
-        border-bottom-color: #007BE0 !important;
-    }
-    div[data-baseweb="tab-list"] button[aria-selected="false"] {
-        color: #333333 !important;
-    }
-    .stTextInput input:focus, 
-    .stSelectbox div[role="button"]:focus, 
-    .stTextArea textarea:focus,
-    div[data-baseweb="select"] > div:focus-within {
-        border-color: #007BE0 !important;
-        box-shadow: 0 0 0 1px #007BE0 !important;
-    }
-    div[data-testid="stSpinner"] > div {
-        border-top-color: #6AC64F !important;
-    }
-
-    /* ==========================================
-       PERSONALIZACIÓN CSS PARA EL CALENDARIO (FULLCALENDAR)
-       ========================================== */
-    .fc .fc-button,
-    .fc .fc-button-primary,
-    .fc-button,
-    .fc-button-primary,
-    button.fc-button,
-    button.fc-today-button,
-    button.fc-prev-button,
-    button.fc-next-button {
-        background-color: #007BE0 !important;
-        background: #007BE0 !important;
-        border-color: #007BE0 !important;
-        color: #FFFFFF !important;
-        opacity: 1 !important;
-        box-shadow: none !important;
-        font-family: 'Figtree', sans-serif !important;
-        font-weight: 600 !important;
-        text-transform: capitalize !important;
-        transition: background-color 0.2s ease, border-color 0.2s ease !important;
-    }
-    .fc .fc-button:hover,
-    .fc .fc-button-primary:hover,
-    .fc-button:hover,
-    .fc-button-primary:hover,
-    button.fc-button:hover,
-    button.fc-today-button:hover,
-    button.fc-prev-button:hover,
-    button.fc-next-button:hover {
-        background-color: #6AC64F !important;
-        background: #6AC64F !important;
-        border-color: #6AC64F !important;
-        color: #FFFFFF !important;
-    }
-    .fc .fc-button-primary:not(:disabled).fc-button-active, 
-    .fc .fc-button-primary:not(:disabled):active,
-    .fc-button-active,
-    button.fc-button-active,
-    .fc .fc-button-primary:active {
-        background-color: #00569E !important;
-        background: #00569E !important;
-        border-color: #00569E !important;
-        color: #FFFFFF !important;
-    }
-    .fc .fc-col-header-cell-cushion {
-        color: #000000 !important;
-        font-weight: 700 !important;
-        text-decoration: none !important;
-    }
-    .fc-event, .fc-event-dot {
-        border-color: transparent !important;
-    }
-    .fc .fc-daygrid-day.fc-day-today {
-        background-color: rgba(0, 123, 224, 0.08) !important;
-    }
-    .fc .fc-day-today .fc-daygrid-day-number {
-        color: #007BE0 !important;
-        font-weight: 800 !important;
-    }
-    .fc .fc-day-today .fc-daygrid-day-top {
-        border-top: 3px solid #007BE0 !important;
-    }
-    .fc .fc-timegrid-now-indicator-line {
-        border-color: #6AC64F !important;
-        border-width: 2px !important;
-    }
-    .fc .fc-timegrid-now-indicator-arrow {
-        border-top-color: #6AC64F !important;
-        border-bottom-color: #6AC64F !important;
-    }
+    h1 { color: #000000 !important; font-weight: 800 !important; font-size: 2.2rem !important; }
+    h2, h3 { color: #007BE0 !important; font-weight: 700 !important; }
+    button[kind="primary"] { background-color: #6AC64F !important; color: #FFFFFF !important; font-weight: 700 !important; border-radius: 6px !important; border: none !important; }
+    button[kind="primary"]:hover { background-color: #59b040 !important; }
+    .hashtag-gestion { color: #6AC64F !important; font-weight: 800; font-size: 1.1rem; }
+    div[data-baseweb="tab-list"] button[aria-selected="true"] { color: #007BE0 !important; border-bottom-color: #007BE0 !important; }
     </style>
 """, unsafe_allow_html=True)
 
 LOGO_FILE = "isologo_RN.svg"
 
 # ==========================================
-# 2. CONTROL DE ACCESO (MODO LECTOR / EDITOR)
+# 2. CONTROL DE ACCESO
 # ==========================================
 st.sidebar.header("🔑 Control de Acceso")
 password = st.sidebar.text_input("Contraseña de Editor", type="password")
-
 CONTRASEÑA_CORRECTA = "UPEU2026" 
 es_editor = (password == CONTRASEÑA_CORRECTA)
 
@@ -208,7 +64,7 @@ else:
     st.sidebar.info("👁️ Modo Visualización (Solo Lectura)")
 
 # ==========================================
-# 3. FUNCIONES DE PERSISTENCIA DIRECTA CON GITHUB API
+# 3. CONEXIÓN A GITHUB Y FUNCIONES AUXILIARES
 # ==========================================
 
 def github_request(method, payload=None):
@@ -220,39 +76,30 @@ def github_request(method, payload=None):
         return None, "Faltan configurar las credenciales de GitHub en los Secrets de Streamlit."
         
     url = f"https://api.github.com/repos/{repo}/contents/{path}"
-    headers = {
-        "Authorization": f"token {token}",
-        "Accept": "application/vnd.github.v3+json"
-    }
+    headers = {"Authorization": f"token {token}", "Accept": "application/vnd.github.v3+json"}
     
     if method == "GET":
         response = requests.get(url, headers=headers)
         if response.status_code == 200:
             return response.json(), None
         return None, f"Error al descargar archivo de GitHub (Status: {response.status_code})"
-        
     elif method == "PUT" and payload:
         response = requests.put(url, headers=headers, json=payload)
         if response.status_code in [200, 201]:
             return response.json(), None
         return None, f"Error al guardar cambios en GitHub: {response.text}"
-        
     return None, "Método inválido"
 
 def limpiar_fecha_para_calendario(val):
     val_str = str(val).strip()
-    if not val_str or val_str == "nan" or val_str == "":
-        return None
+    if not val_str or val_str == "nan" or val_str == "": return None
     match_iso = re.match(r"^(\d{4}-\d{2}-\d{2})", val_str)
-    if match_iso:
-        return match_iso.group(1)
+    if match_iso: return match_iso.group(1)
     val_str = re.sub(r"\s*/\s*", "/", val_str)
     match_rango = re.search(r"(\d+)\s*(?:y|a|-)\s*\d+/(\d+)/(\d{3,4})", val_str)
-    if match_rango:
-        return f"{match_rango.group(3)}-{match_rango.group(2).zfill(2)}-{match_rango.group(1).zfill(2)}"
+    if match_rango: return f"{match_rango.group(3)}-{match_rango.group(2).zfill(2)}-{match_rango.group(1).zfill(2)}"
     match_normal = re.match(r"^(\d{1,2})/(\d{1,2})/(\d{3,4})", val_str)
-    if match_normal:
-        return f"{match_normal.group(3)}-{match_normal.group(2).zfill(2)}-{match_normal.group(1).zfill(2)}"
+    if match_normal: return f"{match_normal.group(3)}-{match_normal.group(2).zfill(2)}-{match_normal.group(1).zfill(2)}"
     return None
 
 def obtener_mes_nombre(val_fecha):
@@ -260,43 +107,32 @@ def obtener_mes_nombre(val_fecha):
     val_str = str(val_fecha).strip()
     f_limpia = limpiar_fecha_para_calendario(val_str)
     if f_limpia:
-        try:
-            return meses_es[int(f_limpia.split("-")[1])]
-        except:
-            pass
+        try: return meses_es[int(f_limpia.split("-")[1])]
+        except: pass
     for m in meses_es:
-        if m and m.lower() in val_str.lower():
-            return m
+        if m and m.lower() in val_str.lower(): return m
     return "Fecha Flexible / Por definir"
 
 def load_data():
     file_info, error = github_request("GET")
-    columnas_requeridas = [
-        'Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar',
-        'Explicación breve de la actividad', 'Cantidad de personas estimadas',
-        'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar'
-    ]
+    columnas_requeridas = ['Fecha', 'Hora', 'Semana', 'Actividad', 'Ciudad', 'Lugar', 'Explicación breve de la actividad', 'Cantidad de personas estimadas', 'Organismo/Actor', 'Estado', 'Público Destinatario', 'Prioridad', 'Invitación a participar']
     
     if error or not file_info:
         path_local = st.secrets.get("GITHUB_FILE_PATH", "agenda_territorial_consolidada.xlsx")
-        if os.path.exists(path_local):
-            df = pd.read_excel(path_local)
-        else:
-            return pd.DataFrame(columns=columnas_requeridas)
+        if os.path.exists(path_local): df = pd.read_excel(path_local)
+        else: return pd.DataFrame(columns=columnas_requeridas)
     else:
         conte_bytes = base64.b64decode(file_info["content"])
         df = pd.read_excel(io.BytesIO(conte_bytes))
         
     df.columns = df.columns.str.strip()
-    
     df['_temp_f'] = df['Fecha'].astype(str).str.strip().replace('', None)
     df['_temp_a'] = df['Actividad'].astype(str).str.strip().replace('', None)
     df = df[(~df['_temp_f'].isna() & (df['_temp_f'] != 'nan')) | (~df['_temp_a'].isna() & (df['_temp_a'] != 'nan'))]
     df = df.drop(columns=['_temp_f', '_temp_a'])
 
     for col in columnas_requeridas:
-        if col not in df.columns:
-            df[col] = ""
+        if col not in df.columns: df[col] = ""
             
     df['Actividad'] = df['Actividad'].fillna("Actividad sin título").astype(str)
     df['Hora'] = df['Hora'].fillna("Sin especificar").astype(str).str.strip()
@@ -309,7 +145,6 @@ def load_data():
     df['Prioridad'] = df['Prioridad'].fillna("INTERMEDIA").astype(str)
     df['Público Destinatario'] = df['Público Destinatario'].fillna("General").astype(str)
     df['Invitación a participar'] = df['Invitación a participar'].fillna("").astype(str)
-    
     return df.reset_index(drop=True)
 
 def push_data_to_github(df, commit_message="Actualización desde el panel de control territorial"):
@@ -319,17 +154,11 @@ def push_data_to_github(df, commit_message="Actualización desde el panel de con
         return False
         
     output = io.BytesIO()
-    with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, index=False)
+    with pd.ExcelWriter(output, engine='openpyxl') as writer: df.to_excel(writer, index=False)
     excel_bytes = output.getvalue()
     content_b64 = base64.b64encode(excel_bytes).decode("utf-8")
     
-    payload = {
-        "message": commit_message,
-        "content": content_b64,
-        "sha": file_info["sha"]
-    }
-    
+    payload = {"message": commit_message, "content": content_b64, "sha": file_info["sha"]}
     _, put_error = github_request("PUT", payload=payload)
     if put_error:
         st.error(put_error)
@@ -347,59 +176,34 @@ def set_cell_background(cell, color_hex):
     try:
         shading_xml = f'<w:shd {nsdecls("w")} w:fill="{color_hex}"/>'
         cell._tc.get_or_add_tcPr().append(parse_xml(shading_xml))
-    except:
-        pass
+    except: pass
 
 def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TERRITORIAL", aclaracion_rango=""):
     doc = docx.Document()
     try:
         for section in doc.sections:
-            section.top_margin = Inches(1)
-            section.bottom_margin = Inches(1)
-            section.left_margin = Inches(1)
-            section.right_margin = Inches(1)
-    except:
-        pass
-    style = doc.styles['Normal']
-    style.font.name = 'Calibri'
-    style.font.size = Pt(11)
+            section.top_margin = Inches(1); section.bottom_margin = Inches(1)
+            section.left_margin = Inches(1); section.right_margin = Inches(1)
+    except: pass
+    style = doc.styles['Normal']; style.font.name = 'Calibri'; style.font.size = Pt(11)
     
     p_header = doc.add_paragraph()
-    run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n")
-    run_gob.font.bold = True
-    run_gob.font.size = Pt(10)
+    run_gob = p_header.add_run("GOBIERNO DE LA PROVINCIA DE RÍO NEGRO\n"); run_gob.font.bold = True; run_gob.font.size = Pt(10)
     try: run_gob.font.color.rgb = docx.shared.RGBColor(106, 198, 79)
     except: pass
     
-    run_sub = p_header.add_run("Ministerio de Educación y Derechos Humanos\nUnidad Provincial de Enlace con Universidades (UPEU)\n")
-    run_sub.font.size = Pt(9.5)
+    run_sub = p_header.add_run("Ministerio de Educación y Derechos Humanos\nUnidad Provincial de Enlace con Universidades (UPEU)\n"); run_sub.font.size = Pt(9.5)
     try: run_sub.font.color.rgb = docx.shared.RGBColor(100, 100, 100)
     except: pass
     
-    try:
-        p_line = doc.add_paragraph()
-        p_line_border = OxmlElement('w:pBdr')
-        bottom_border = OxmlElement('w:bottom')
-        bottom_border.set(qn('w:val'), 'single')
-        bottom_border.set(qn('w:sz'), '8')
-        bottom_border.set(qn('w:space'), '1')
-        bottom_border.set(qn('w:color'), '007BE0')
-        p_line_border.append(bottom_border)
-        p_line._p.get_or_add_pPr().append(p_line_border)
-    except: pass
-    
     p_title = doc.add_paragraph()
-    run_title = p_title.add_run(titulo_personalizado.upper())
-    run_title.font.bold = True
-    run_title.font.size = Pt(15)
+    run_title = p_title.add_run(titulo_personalizado.upper()); run_title.font.bold = True; run_title.font.size = Pt(15)
     try: run_title.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
     except: pass
     
     p_date = doc.add_paragraph()
     aclaracion_texto = aclaracion_rango if aclaracion_rango else "Coordinación de Planificación"
-    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {aclaracion_texto}")
-    run_date.font.italic = True
-    run_date.font.size = Pt(9.5)
+    run_date = p_date.add_run(f"Fecha de emisión: {datetime.now().strftime('%d/%m/%Y')} | {aclaracion_texto}"); run_date.font.italic = True; run_date.font.size = Pt(9.5)
     p_date.paragraph_format.space_after = Pt(24)
     
     total_acciones = len(df)
@@ -407,21 +211,15 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
     
     table_resumen = doc.add_table(rows=2, cols=2)
     hdr_res = table_resumen.rows[0].cells
-    hdr_res[0].text = "Acciones en el Reporte"
-    hdr_res[1].text = "Proyección de Asistentes Global"
+    hdr_res[0].text = "Acciones en el Reporte"; hdr_res[1].text = "Proyección de Asistentes Global"
     for cell in hdr_res:
         set_cell_background(cell, "F5F5F5")
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.runs[0].font.bold = True
+        p = cell.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.runs[0].font.bold = True
         
     row_res = table_resumen.rows[1].cells
-    row_res[0].text = str(total_acciones)
-    row_res[1].text = f"{total_personas:,} personas"
+    row_res[0].text = str(total_acciones); row_res[1].text = f"{total_personas:,} personas"
     for cell in row_res:
-        p = cell.paragraphs[0]
-        p.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        p.runs[0].font.bold = True
+        p = cell.paragraphs[0]; p.alignment = WD_ALIGN_PARAGRAPH.CENTER; p.runs[0].font.bold = True
         try: p.runs[0].font.color.rgb = docx.shared.RGBColor(0, 123, 224)
         except: pass
         
@@ -435,34 +233,26 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
         except: pass
         
         for idx, row in df_ordenado.iterrows():
-            p_act = doc.add_paragraph()
-            p_act.paragraph_format.space_before = Pt(14)
+            p_act = doc.add_paragraph(); p_act.paragraph_format.space_before = Pt(14)
             act_titulo = str(row.get('Actividad', 'Sin Nombre'))
-            run_header = p_act.add_run(f"📌 Actividad {idx+1}: {act_titulo}")
-            run_header.font.bold = True
+            run_header = p_act.add_run(f"📌 Actividad {idx+1}: {act_titulo}"); run_header.font.bold = True
             try: run_header.font.color.rgb = docx.shared.RGBColor(0, 123, 224)
             except: pass
             
             ficha_table = doc.add_table(rows=6, cols=2)
             ficha_table.style = 'Light Shading Accent 1'
-            ficha_table.rows[0].cells[0].text = "Actividad:"
-            ficha_table.rows[0].cells[1].text = act_titulo
-            ficha_table.rows[1].cells[0].text = "Ciudad:"
-            ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
+            ficha_table.rows[0].cells[0].text = "Actividad:"; ficha_table.rows[0].cells[1].text = act_titulo
+            ficha_table.rows[1].cells[0].text = "Ciudad:"; ficha_table.rows[1].cells[1].text = str(row.get('Ciudad', 'Sin especificar'))
             
             fecha_val = str(row.get('Fecha', 'Sin especificar')).strip().split(" ")[0]
             fecha_mostrar = "Sin especificar (A coordinar por el territorio)" if "sin" in fecha_val.lower() or fecha_val == "" else fecha_val
             hora_val = str(row.get('Hora', 'Sin especificar')).strip()
             hora_text = " - Sin especificar" if "sin" in hora_val.lower() or hora_val == "" else f" - {hora_val} hs"
                 
-            ficha_table.rows[2].cells[0].text = "Fecha:"
-            ficha_table.rows[2].cells[1].text = f"{fecha_mostrar}{hora_text}"
-            ficha_table.rows[3].cells[0].text = "Lugar:"
-            ficha_table.rows[3].cells[1].text = str(row.get('Lugar', 'Sin especificar'))
-            ficha_table.rows[4].cells[0].text = "Explicación breve de la actividad:"
-            ficha_table.rows[4].cells[1].text = str(row.get('Explicación breve de la actividad', 'Sin notas adicionales'))
-            ficha_table.rows[5].cells[0].text = "Cantidad de personas estimadas:"
-            ficha_table.rows[5].cells[1].text = f"{int(row.get('Cantidad de personas estimadas', 0)):,} asistentes"
+            ficha_table.rows[2].cells[0].text = "Fecha:"; ficha_table.rows[2].cells[1].text = f"{fecha_mostrar}{hora_text}"
+            ficha_table.rows[3].cells[0].text = "Lugar:"; ficha_table.rows[3].cells[1].text = str(row.get('Lugar', 'Sin especificar'))
+            ficha_table.rows[4].cells[0].text = "Explicación breve de la actividad:"; ficha_table.rows[4].cells[1].text = str(row.get('Explicación breve de la actividad', 'Sin notas adicionales'))
+            ficha_table.rows[5].cells[0].text = "Cantidad de personas estimadas:"; ficha_table.rows[5].cells[1].text = f"{int(row.get('Cantidad de personas estimadas', 0)):,} asistentes"
             
             for r_idx, r in enumerate(ficha_table.rows):
                 try:
@@ -471,19 +261,14 @@ def crear_reporte_word_areas(df, titulo_personalizado="REPORTE PLANIFICACION TER
                         r.cells[1].paragraphs[0].runs[0].font.bold = True
                         r.cells[1].paragraphs[0].runs[0].font.color.rgb = docx.shared.RGBColor(106, 198, 79)
                 except: pass
-    else:
-        doc.add_paragraph("No se registran actividades para los criterios de búsqueda actuales.")
+    else: doc.add_paragraph("No se registran actividades para los criterios de búsqueda actuales.")
         
-    p_footer = doc.add_paragraph()
-    p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos")
-    run_hashtag.font.bold = True
+    p_footer = doc.add_paragraph(); p_footer.alignment = WD_ALIGN_PARAGRAPH.CENTER
+    run_hashtag = p_footer.add_run("#gobiernodelosrionegrinos"); run_hashtag.font.bold = True
     try: run_hashtag.font.color.rgb = docx.shared.RGBColor(106, 198, 79)
     except: pass
     
-    buffer = io.BytesIO()
-    doc.save(buffer)
-    buffer.seek(0)
+    buffer = io.BytesIO(); doc.save(buffer); buffer.seek(0)
     return buffer.getvalue()
 
 def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades"):
@@ -494,8 +279,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
     
     for idx, row in df_procesar.iterrows():
         fecha_val = str(row.get('Fecha', 'Sin especificar')).strip()
-        
-        # Flexibles: actividades tildadas sin fecha exacta
+        # Separación estricta de actividades sin fecha fija
         if "sin especificar" in fecha_val.lower() or "a coordinar" in fecha_val.lower() or fecha_val == "":
             flexibles.append(row)
         else:
@@ -507,7 +291,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
         df_cron = pd.DataFrame(cronologicos).sort_values(by='_fecha_orden').reset_index(drop=True)
         cronologicos = [row for _, row in df_cron.iterrows()]
         
-    # Orden estricto: flexibles primero, cronológicos después
+    # Ubicación garantizada: PRIMERO los flexibles, LUEGO los cronológicos
     lista_final = flexibles + cronologicos
     total_eventos = len(lista_final)
     
@@ -541,7 +325,7 @@ def generar_mensaje_whatsapp(df, titulo_cabecera="Agenda completa de actividades
     return "\n".join(lines)
 
 # ==========================================
-# 4. DISEÑO DE LA INTERFAZ DE USUARIO (LOGO RN)
+# 4. DISEÑO DE INTERFAZ Y PESTAÑAS
 # ==========================================
 if os.path.exists(LOGO_FILE): st.image(LOGO_FILE, width=180)
 else: st.info("Logotipo Río Negro (SVG)")
@@ -555,8 +339,7 @@ with col_title_left:
     st.markdown("<span class='hashtag-gestion'>#gobiernodelosrionegrinos</span>", unsafe_allow_html=True) 
 
 with col_title_right:
-    st.write("")
-    st.write("")
+    st.write(""); st.write("")
     if st.button("🔄 Sincronizar desde GitHub", use_container_width=True):
         st.session_state.agenda = load_data()
         st.success("¡Base de datos sincronizada desde GitHub!")
@@ -616,7 +399,7 @@ with tab1:
                 st.markdown(f"**📝 Explicación breve:** {props.get('explicacion')}")
     else: st.warning("No hay eventos programados para mostrar.")
 
-# TAB 2: FORMULARIO DE CARGA CON DESPLIEGUE DINÁMICO DE MES
+# TAB 2: FORMULARIO DE CARGA
 if es_editor and tab2 is not None:
     with tab2:
         st.header("Registrar Nueva Actividad")
@@ -626,7 +409,7 @@ if es_editor and tab2 is not None:
                 st.markdown("**📅 Fecha del Evento**")
                 fecha_sin_especificar = st.checkbox("Dejar fecha sin especificar (A coordinar)", value=False)
                 
-                # Despliegue dinámico de selector de mes si la fecha es flexible
+                # Despliegue de mes al tildar fecha sin especificar
                 if fecha_sin_especificar:
                     mes_propuesto = st.selectbox("Mes de referencia asignado:", ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"], index=datetime.today().month-1)
                     anio_propuesto = st.selectbox("Año:", [2026, 2027])
@@ -637,10 +420,7 @@ if es_editor and tab2 is not None:
 
                 st.markdown("**⏰ Horario del Evento**")
                 hora_sin_especificar = st.checkbox("Dejar hora sin especificar", value=False)
-                if hora_sin_especificar:
-                    f_hora = None
-                else:
-                    f_hora = st.time_input("Hora fija", value=time(9, 0))
+                f_hora = None if hora_sin_especificar else st.time_input("Hora fija", value=time(9, 0))
                     
                 f_actividad = st.text_input("Nombre de la Actividad")
                 f_ciudad = st.text_input("Ciudad")
@@ -687,7 +467,7 @@ if es_editor and tab2 is not None:
                         st.success("¡Actividad guardada e impactada en tu repositorio!")
                         st.rerun()
 
-# TAB 3: MODIFICAR / ELIMINAR CON EDICIÓN DE MES DE REFERENCIA
+# TAB 3: MODIFICAR / ELIMINAR
 if es_editor and tab3 is not None:
     with tab3:
         st.header("Editar / Cancelar Actividades")
@@ -773,7 +553,7 @@ if es_editor and tab3 is not None:
                             st.warning("Registro removido de GitHub.")
                             st.rerun()
 
-# TAB 4: REPORTES Y BUSCADOR
+# TAB 4: REPORTES Y BUSCADOR (FILTRADO INTELIGENTE POR MES)
 with tab4:
     st.header("Buscador y Reportes")
     df_filtrado = st.session_state.agenda.copy()
@@ -822,7 +602,13 @@ with tab4:
             with col_selectores:
                 mes_e = st.selectbox("Seleccionar Mes:", meses_disponibles)
                 df_descarga['_m_c'] = df_descarga['Fecha'].apply(obtener_mes_nombre)
-                df_descarga = df_descarga[df_descarga['_m_c'] == mes_e].drop(columns=['_m_c'])
+                
+                # INCLUSIÓN GARANTIZADA: Trae eventos fijos de ese mes O eventos sin fecha específica
+                df_descarga = df_descarga[
+                    (df_descarga['_m_c'] == mes_e) | 
+                    (df_descarga['Fecha'].astype(str).str.lower().str.contains("sin especificar"))
+                ].drop(columns=['_m_c'])
+                
                 titulo_word, titulo_whatsapp = f"REPORTE - {mes_e.upper()}", f"Planificación - Mes de {mes_e}"
                     
         if solo_con_invitacion:
